@@ -24,3 +24,9 @@
 - [ ] Verify Calculations vs Excel data <!-- id: 7 -->
 - [ ] Test Mobile Responsiveness <!-- id: 8 -->
 - [ ] Final UI Polish (Premium/Glassmorphism style) <!-- id: 9 -->
+
+## Deployment
+- [x] **Production Build** <!-- id: 10 -->
+    - [x] Verify `npm run build` passes
+- [ ] **Hosting** <!-- id: 11 -->
+    - [/] Deploy to Vercel/Netlify (Fixing Suspense Build Error)
