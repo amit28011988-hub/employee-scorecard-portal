@@ -68,6 +68,15 @@ function DashboardContent() {
     // Get current scorecard
     const currentCard = scorecards.find(s => s.month === selectedMonth)
 
+    const formatValue = (val: any) => {
+        if (val === undefined || val === null || val === "") return "-"
+        const num = parseFloat(val)
+        if (isNaN(num)) return val
+        // Returns string with max 2 decimals, removing unnecessary trailing zeros if possible, 
+        // OR strictly 2 if that was the requirement. User said "crossing 2 digit threshold", so limiting to 2 is key.
+        return Number(num.toFixed(2))
+    }
+
     return (
         <div className="min-h-screen bg-slate-50 font-sans text-slate-900 p-6">
             <div className="max-w-6xl mx-auto space-y-6">
@@ -148,7 +157,7 @@ function DashboardContent() {
                                         <td className="px-6 py-4 font-medium text-slate-900">Productivity</td>
                                         <td className="px-6 py-4 text-slate-500">&gt;105%</td>
                                         <td className="px-6 py-4 text-slate-500">30</td>
-                                        <td className="px-6 py-4 font-bold text-slate-800">{currentCard.productivity_achieved}</td>
+                                        <td className="px-6 py-4 font-bold text-slate-800">{formatValue(currentCard.productivity_achieved)}</td>
                                         <td className="px-6 py-4 font-bold text-slate-900 text-lg">{Math.round(currentCard.productivity_score)}</td>
                                         <td className="px-6 py-4 text-right text-emerald-600">-</td>
                                     </tr>
@@ -158,7 +167,7 @@ function DashboardContent() {
                                         <td className="px-6 py-4 font-medium text-slate-900">Quality</td>
                                         <td className="px-6 py-4 text-slate-500">99.00% - 99.50%</td>
                                         <td className="px-6 py-4 text-slate-500">40</td>
-                                        <td className="px-6 py-4 font-bold text-slate-800">{currentCard.quality_achieved}</td>
+                                        <td className="px-6 py-4 font-bold text-slate-800">{formatValue(currentCard.quality_achieved)}</td>
                                         <td className="px-6 py-4 font-bold text-slate-900 text-lg">{Math.round(currentCard.quality_score)}</td>
                                         <td className="px-6 py-4 text-right text-emerald-600">-</td>
                                     </tr>
