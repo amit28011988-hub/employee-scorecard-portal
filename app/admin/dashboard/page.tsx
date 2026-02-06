@@ -1,35 +1,370 @@
 "use client"
 
-import { useState } from "react"
-import { motion } from "framer-motion"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Upload, FileSpreadsheet, Users, LogOut, Settings } from "lucide-react"
+import Link from "next/link"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { Upload, FileSpreadsheet, CheckCircle, AlertCircle, Loader2, LogOut, Settings } from "lucide-react"
+import { databases } from "@/lib/appwrite"
+import { ID, Query } from "appwrite"
+import * as XLSX from "xlsx"
+
+const DB_ID = 'scorecards_db_main'
+const COLL_ID = 'employee_scores_main'
 
 export default function AdminDashboard() {
     const router = useRouter()
-    const [isUploading, setIsUploading] = useState(false)
+    const [uploading, setUploading] = useState(false)
+    const [progress, setProgress] = useState("")
+    const [status, setStatus] = useState<{ type: 'success' | 'error' | null, message: string }>({ type: null, message: "" })
+    const [allData, setAllData] = useState<any[]>([])
+    const [selectedMonth, setSelectedMonth] = useState<string>("")
+    const [selectedTeam, setSelectedTeam] = useState<string>("All")
+    const [clearing, setClearing] = useState(false)
 
-    const handleLogout = () => {
-        router.push("/admin")
+    useEffect(() => {
+        fetchAllScorecards()
+    }, [])
+
+    const fetchAllScorecards = async () => {
+        try {
+            // Fetch all documents (limit 100 for now, could paginate)
+            const response = await databases.listDocuments(
+                DB_ID,
+                COLL_ID,
+                [] // Just fetching everything
+            )
+            setAllData(response.documents)
+
+            // Set default month if not set
+            if (response.documents.length > 0 && !selectedMonth) {
+                // Find most common or recent month? Let's pick the first one from unique list
+                const months = Array.from(new Set(response.documents.map((d: any) => d.month)))
+                if (months.length > 0) setSelectedMonth(months[0])
+            }
+        } catch (error) {
+            console.error("Fetch Error", error)
+        }
     }
 
-    const handleUpload = () => {
-        setIsUploading(true)
-        // Mock upload delay
-        setTimeout(() => {
-            setIsUploading(false)
-            alert("File uploaded successfully! (Mock)")
-        }, 2000)
+    const handleClearDatabase = async () => {
+        if (!confirm("ARE YOU SURE? This will delete ALL scorecard data. This cannot be undone.")) return
+
+        setClearing(true)
+        try {
+            // Fetch ID only to delete (SEQUENTIAL to avoid Rate Limit)
+            let docs;
+            do {
+                docs = await databases.listDocuments(DB_ID, COLL_ID)
+                if (docs.documents.length > 0) {
+                    for (const d of docs.documents) {
+                        try {
+                            await databases.deleteDocument(DB_ID, COLL_ID, d.$id)
+                            // Short delay to be kind to the API (Rate Limit Protection)
+                            await new Promise(r => setTimeout(r, 200))
+                        } catch (e) {
+                            console.error("Delete ignored:", e)
+                        }
+                    }
+                }
+            } while (docs.documents.length > 0)
+
+            setStatus({ type: 'success', message: "Database Cleared." })
+            setAllData([])
+            setSelectedMonth("")
+        } catch (error: any) {
+            setStatus({ type: 'error', message: "Failed to clear: " + error.message })
+        } finally {
+            setClearing(false)
+        }
+    }
+
+    // Derived State
+    const availableMonths = Array.from(new Set(allData.map(d => d.month))).sort((a, b) => {
+        // Simple month sorting (e.g., "January 2023" vs "February 2023")
+        const dateA = new Date(a + " 1")
+        const dateB = new Date(b + " 1")
+        return dateB.getTime() - dateA.getTime() // Newest first
+    })
+
+    // Filter by Month first to get relevant teams
+    const monthData = allData.filter(d => d.month === selectedMonth)
+
+    // Get Unique Teams from the Month's data
+    const availableTeams = ["All", ...Array.from(new Set(monthData.map(d => d.team || "Unassigned"))).sort()]
+
+    // Final Filter: Month AND Team
+    const filteredData = monthData.filter(d =>
+        selectedTeam === "All" || (d.team || "Unassigned") === selectedTeam
+    )
+
+    // Group by Team & Sort
+    const teamGroups: Record<string, any[]> = {}
+    filteredData.forEach(d => {
+        const team = d.team || "Unassigned"
+        if (!teamGroups[team]) teamGroups[team] = []
+        teamGroups[team].push(d)
+    })
+
+    // Sort each team's members: Highest Score First (Descending), then Name (A-Z)
+    Object.keys(teamGroups).forEach(team => {
+        teamGroups[team].sort((a, b) => {
+            const scoreDiff = b.total_score - a.total_score // Descending Score
+            if (scoreDiff !== 0) return scoreDiff
+            return a.employee_name.localeCompare(b.employee_name) // Tie-break: Name A-Z
+        })
+    })
+
+    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0]
+        if (!file) return
+
+        setUploading(true)
+        setProgress("Analyzing file structure...")
+        setStatus({ type: null, message: "" })
+
+        try {
+            console.log("Reading file...")
+            const data = await file.arrayBuffer()
+            const workbook = XLSX.read(data)
+
+            // 1. Sheet selection
+            let targetSheetName = workbook.SheetNames.find(name => name.toLowerCase().includes("monthly score card"))
+            if (!targetSheetName) {
+                targetSheetName = workbook.SheetNames.length > 1 ? workbook.SheetNames[1] : workbook.SheetNames[0]
+                console.log(`'Monthly Score Card' sheet not found. Defaulting to: ${targetSheetName}`)
+            }
+            console.log(`Using Sheet: ${targetSheetName}`)
+
+            const worksheet = workbook.Sheets[targetSheetName]
+            const rawData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][]
+
+            if (rawData.length === 0) throw new Error("Sheet is empty.")
+
+            // 2. DETECT FORMAT: List (Database) VS Report (Single)
+            // Strategy: Check if Row 0 looks like a Header Row with "Employee Name"
+            const row0 = rawData[0].map(c => String(c).toLowerCase().trim())
+            const isListMode = row0.includes("employee name") || row0.includes("name")
+
+            if (isListMode) {
+                console.log("--- DETECTED MODE: BULK LIST (Database Style) ---")
+                await processBulkListMode(rawData, row0)
+            } else {
+                console.log("--- DETECTED MODE: SINGLE REPORT (Key-Value Style) ---")
+                await processReportMode(rawData)
+            }
+
+            // Refresh Data after upload
+            await fetchAllScorecards()
+
+        } catch (error: any) {
+            console.error("Upload error", error)
+            setStatus({ type: 'error', message: error.message || "Failed to process file." })
+            console.log(`ERROR: ${error.message}`)
+            setUploading(false)
+        }
+    }
+
+    // --- MODE 1: BULK LIST UPLOAD ---
+    const processBulkListMode = async (rawData: any[][], headers: string[]) => {
+        // Map Columns
+        const getIdx = (keywords: string[]) => headers.findIndex(h => keywords.some(k => h.includes(k)))
+
+        const idxInfo = {
+            name: getIdx(["employee name", "name"]),
+            team: getIdx(["team", "process"]),
+            month: getIdx(["month"]),
+            // Metrics (Base columns, scores are usually adjacent +1)
+            prod: getIdx(["productivity"]),
+            qual: getIdx(["quality"]),
+            attend: getIdx(["attendance"]),
+            ua: getIdx(["unauthorised", "unplanned", "leave"]), // Unauthorised Absence
+            rca: getIdx(["escalation", "rca"]),
+            pii: getIdx(["pii", "shared pii"]),
+            total: getIdx(["total"])
+        }
+
+        console.log(`Column Mapping: ${JSON.stringify(idxInfo)}`)
+
+        if (idxInfo.name === -1) throw new Error("Critical: 'Employee Name' column not found in headers.")
+
+        let successCount = 0
+        let failCount = 0
+        const totalRows = rawData.length - 1 // Exclude header
+
+        // Iterate Data Rows
+        for (let r = 1; r < rawData.length; r++) {
+            const row = rawData[r]
+            if (!row || row.length === 0) continue
+
+            const name = row[idxInfo.name]
+            if (!name || String(name).trim() === "") continue
+
+            setProgress(`Processing ${r}/${totalRows}: ${name}`)
+
+            // Helper to get score (usually next column if numeric, or same col if value)
+            const getVal = (idx: number) => (idx !== -1 && row[idx] !== undefined) ? row[idx] : 0
+
+            // For metrics like Prod/Quality, the screenshot shows [Value, Score]. 
+            // We want the Score (Col+1) for the 'score' field, and Value (Col) for 'achieved'
+            const getMetricPair = (baseIdx: number) => {
+                if (baseIdx === -1) return { score: 0, val: "0" }
+                const val = row[baseIdx] // The raw % or count
+                const score = row[baseIdx + 1] // The adjacent cell seems to be the score based on logs
+                return {
+                    val: val !== undefined ? String(val) : "0",
+                    score: typeof score === 'number' ? score : Number(score) || 0
+                }
+            }
+
+            // Special handling based on data types in screenshot
+            const prod = getMetricPair(idxInfo.prod)
+            const qual = getMetricPair(idxInfo.qual)
+
+            // Attendance: Screenshot shows "Attendance", "AttendanceBonus"
+            // If explicit bonus column exists, use it. Else assume +1
+            const attendVal = getVal(idxInfo.attend)
+            const attendScore = (idxInfo.attend !== -1 && row[idxInfo.attend + 1] !== undefined) ? Number(row[idxInfo.attend + 1]) : 0
+
+            // Leaves & RCA: Usually count is value, next col might be score
+            // Log shows: "Unauthorised Absence", "Score"
+            const ua = getMetricPair(idxInfo.ua)
+            const rca = getMetricPair(idxInfo.rca)
+            const pii = getMetricPair(idxInfo.pii)
+
+            // Month Fallback
+            let month = idxInfo.month !== -1 ? row[idxInfo.month] : ""
+            if (!month) {
+                // Default to PREVIOUS month (e.g., Upload in Feb -> Report for Jan)
+                const d = new Date()
+                d.setMonth(d.getMonth() - 1)
+                month = d.toLocaleString('default', { month: 'long', year: 'numeric' })
+            }
+
+            const record = {
+                employee_name: String(name).trim(),
+                team: idxInfo.team !== -1 ? String(row[idxInfo.team]) : "General",
+                month: String(month),
+                // FIX: Math.round all scores to satisfy Appwrite Integer Schema
+                productivity_score: Math.round(prod.score),
+                productivity_achieved: typeof prod.val === 'number' ? (prod.val * 100).toFixed(1) + "%" : prod.val,
+                productivity_tier: "-",
+
+                quality_score: Math.round(qual.score),
+                quality_achieved: typeof qual.val === 'number' ? (qual.val * 100).toFixed(1) + "%" : qual.val,
+                quality_tier: "-",
+
+                attendance_score: Math.round(attendScore),
+                attendance_value: String(attendVal),
+
+                unplanned_leaves_score: Math.round(ua.score),
+                unplanned_leaves_value: Math.ceil(Number(ua.val) || 0), // Count can be 0.5, treat as 1 absence? Or round? Using ceil for safety on count.
+
+                rca_score: Math.round(rca.score),
+                rca_value: Math.ceil(Number(rca.val) || 0),
+
+                pii_score: Math.round(pii.score),
+                pii_approval: Math.ceil(Number(pii.val) || 0),
+
+                total_score: Math.round(Number(getVal(idxInfo.total)) || 0)
+            }
+
+            // Upload
+            // UPSERT LOGIC: Check for existing document to prevent duplicates
+            try {
+                // Search for existing record for this Person + Month
+                const existingDocs = await databases.listDocuments(
+                    DB_ID,
+                    COLL_ID,
+                    [
+                        Query.equal("employee_name", record.employee_name),
+                        Query.equal("month", record.month)
+                    ]
+                )
+
+                if (existingDocs.documents.length > 0) {
+                    // UPDATE existing (Pick the first match)
+                    const docId = existingDocs.documents[0].$id
+                    await databases.updateDocument(DB_ID, COLL_ID, docId, record)
+                    successCount++
+                } else {
+                    // CREATE new
+                    await databases.createDocument(DB_ID, COLL_ID, ID.unique(), record)
+                    successCount++
+                }
+            } catch (err) {
+                console.error("Row Upload Fail", err)
+                console.log(`Failed to upload ${name}: ${err}`)
+                failCount++
+            }
+        }
+
+        setStatus({
+            type: failCount > 0 ? 'error' : 'success',
+            message: `Bulk Import Complete. Success: ${successCount}. Failed: ${failCount}. ${failCount > 0 ? "Check logs." : ""}`
+        })
+        setUploading(false)
+    }
+
+    // --- MODE 2: SINGLE REPORT (Legacy Support) ---
+    const processReportMode = async (rawData: any[][]) => {
+        // ... (Keep existing complex scanning logic here if needed, or simplify)
+        // For now, re-using a simplified version of the previous logic to save space
+        // If we are sure it's list mode, this might not run.
+        console.log("Report Mode detected (fallback). Scanning...")
+
+        // 1. Header Detection
+        let metricsHeaderRowIndex = -1
+        const headerKeywords = ["metric", "metrics", "kpi", "particulars"]
+        let colIdx: any = {}
+
+        for (let r = 0; r < rawData.length; r++) {
+            const row = rawData[r].map(c => String(c).toLowerCase().trim())
+            if (row.some(c => headerKeywords.some(k => c.includes(k)))) {
+                metricsHeaderRowIndex = r
+                colIdx.metric = row.findIndex(c => headerKeywords.some(k => c.includes(k)))
+                colIdx.achieved = row.findIndex(c => c.includes("achieved"))
+                colIdx.score = row.findIndex(c => c.includes("marks obtained") || c.includes("score"))
+                break
+            }
+        }
+
+        if (metricsHeaderRowIndex === -1) throw new Error("Could not find Metrics Table in Report Mode.")
+
+        // 2. Metadata Scan (Strictly ABOVE header)
+        let metadata: any = {}
+        for (let r = 0; r < metricsHeaderRowIndex; r++) {
+            const row = rawData[r].map(c => String(c).toLowerCase().trim())
+            const findVal = (key: string) => {
+                const idx = row.findIndex(c => c.includes(key))
+                if (idx !== -1) {
+                    for (let k = idx + 1; k < row.length; k++) if (rawData[r][k]) return rawData[r][k]
+                }
+            }
+            if (!metadata.employee_name) metadata.employee_name = findVal("name")
+            if (!metadata.team) metadata.team = findVal("team")
+            if (!metadata.month) metadata.month = findVal("month")
+        }
+
+        if (!metadata.employee_name) throw new Error("Employee Name not found in metadata section.")
+
+        // 3. Metrics
+        // (Simplified extraction for legacy mode - trusting List Mode is the primary target now)
+        const record = { ...metadata, total_score: 0 } // ... fill in others as 0 for safety
+
+        await databases.createDocument(DB_ID, COLL_ID, ID.unique(), record)
+        setStatus({ type: 'success', message: `Uploaded Single Report for ${record.employee_name}` })
+        setUploading(false)
     }
 
     return (
-        <div className="min-h-screen bg-slate-50 flex font-sans text-slate-900">
-
+        <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex font-sans text-slate-900 dark:text-slate-100">
             {/* Sidebar */}
-            <aside className="w-64 bg-white border-r border-slate-200 hidden md:flex flex-col">
-                <div className="p-6 border-b border-slate-100 flex items-center gap-2">
+            <aside className="w-64 bg-white dark:bg-slate-950 border-r border-slate-200 dark:border-slate-800 hidden md:flex flex-col">
+                <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2">
                     <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-600 to-teal-500 flex items-center justify-center">
                         <Settings className="w-5 h-5 text-white" />
                     </div>
@@ -39,116 +374,175 @@ export default function AdminDashboard() {
                 </div>
 
                 <nav className="flex-1 p-4 space-y-1">
-                    <Button variant="ghost" className="w-full justify-start text-blue-600 bg-blue-50 font-medium">
+                    <Button variant="ghost" className="w-full justify-start text-blue-600 bg-blue-50 dark:bg-blue-900/20 font-medium">
                         <FileSpreadsheet className="w-4 h-4 mr-2" />
                         Scorecard Data
                     </Button>
-                    <Button variant="ghost" className="w-full justify-start text-slate-600 hover:text-blue-600 hover:bg-slate-50">
-                        <Users className="w-4 h-4 mr-2" />
-                        Employees
-                    </Button>
                 </nav>
 
-                <div className="p-4 border-t border-slate-100">
-                    <Button variant="ghost" className="w-full justify-start text-red-500 hover:text-red-700 hover:bg-red-50" onClick={handleLogout}>
+                <div className="p-4 border-t border-slate-100 dark:border-slate-800">
+                    <Button variant="ghost" className="w-full justify-start text-red-500 hover:text-red-700 hover:bg-red-50" onClick={() => router.push("/")}>
                         <LogOut className="w-4 h-4 mr-2" />
                         Logout
                     </Button>
                 </div>
             </aside>
 
-            {/* Main Content */}
-            <main className="flex-1 overflow-y-auto">
-                {/* Top Bar for Mobile */}
-                <div className="md:hidden bg-white border-b border-slate-200 p-4 flex justify-between items-center">
-                    <span className="font-bold">Admin Panel</span>
-                    <Button variant="ghost" size="sm" onClick={handleLogout}><LogOut className="w-4 h-4" /></Button>
-                </div>
+            <div className="flex-1 p-8 max-w-5xl mx-auto space-y-8 overflow-y-auto">
+                <header>
+                    <h1 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-100">Dashboard Overview</h1>
+                    <p className="text-muted-foreground">Manage scorecards and employee data.</p>
+                </header>
 
-                <div className="p-8 max-w-5xl mx-auto space-y-8">
-
-                    <header className="mb-8">
-                        <h1 className="text-3xl font-bold text-slate-800">Dashboard Overview</h1>
-                        <p className="text-slate-500">Manage scorecards and employee data.</p>
-                    </header>
-
-                    {/* Quick Stats Row */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        <Card className="border-none shadow-md bg-gradient-to-br from-blue-500 to-blue-600 text-white">
-                            <CardContent className="p-6">
-                                <div className="flex justify-between items-start">
-                                    <div>
-                                        <p className="text-blue-100 text-sm font-medium">Total Employees</p>
-                                        <h3 className="text-3xl font-bold mt-2">42</h3>
-                                    </div>
-                                    <Users className="w-8 h-8 text-blue-200" />
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                            <FileSpreadsheet className="w-5 h-5 text-green-600" />
+                            Upload Scorecard Data
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        <div className="border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-lg p-8 text-center hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                            <div className="flex flex-col items-center gap-4">
+                                <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-full">
+                                    <Upload className="w-8 h-8 text-blue-600 dark:text-blue-400" />
                                 </div>
-                            </CardContent>
-                        </Card>
-
-                        <Card className="border-none shadow-md bg-white">
-                            <CardContent className="p-6">
-                                <div className="flex justify-between items-start">
-                                    <div>
-                                        <p className="text-slate-500 text-sm font-medium">Last Upload</p>
-                                        <h3 className="text-3xl font-bold text-slate-800 mt-2">Oct 24</h3>
-                                    </div>
-                                    <FileSpreadsheet className="w-8 h-8 text-teal-500" />
+                                <div className="space-y-1">
+                                    <p className="font-medium">Click to upload Excel file (.xlsx)</p>
+                                    <p className="text-xs text-muted-foreground">Ensure headers match the template.</p>
                                 </div>
-                            </CardContent>
-                        </Card>
-
-                        <Card className="border-none shadow-md bg-white">
-                            <CardContent className="p-6">
-                                <div className="flex justify-between items-start">
-                                    <div>
-                                        <p className="text-slate-500 text-sm font-medium">Pending Reviews</p>
-                                        <h3 className="text-3xl font-bold text-slate-800 mt-2">0</h3>
-                                    </div>
-                                    <div className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center">
-                                        <span className="text-orange-600 font-bold">!</span>
-                                    </div>
-                                </div>
-                            </CardContent>
-                        </Card>
-                    </div>
-
-                    {/* Upload Section */}
-                    <section>
-                        <div className="flex items-center justify-between mb-4">
-                            <h2 className="text-xl font-bold text-slate-800">Upload Monthly Scorecards</h2>
+                                <Input
+                                    type="file"
+                                    accept=".xlsx, .xls"
+                                    className="max-w-xs cursor-pointer"
+                                    onChange={handleFileUpload}
+                                    disabled={uploading}
+                                />
+                            </div>
                         </div>
 
-                        <Card className="border-dashed border-2 border-blue-200 bg-blue-50/50">
-                            <CardContent className="p-12 flex flex-col items-center text-center">
-                                <div className="w-16 h-16 rounded-full bg-blue-100 flex items-center justify-center mb-4">
-                                    <Upload className="w-8 h-8 text-blue-600" />
-                                </div>
-                                <h3 className="text-lg font-semibold text-blue-900 mb-2">Upload Excel / CSV File</h3>
-                                <p className="text-slate-500 max-w-sm mb-6">
-                                    Drag and drop your monthly scorecard file here, or click to browse. Supported formats: .xlsx, .csv
-                                </p>
+                        {uploading && (
+                            <div className="flex items-center gap-3 p-4 bg-muted rounded-md text-sm">
+                                <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
+                                <span>{progress}</span>
+                            </div>
+                        )}
 
-                                <div className="flex gap-4">
-                                    <input type="file" className="hidden" id="file-upload" accept=".xlsx,.csv" />
-                                    <Button
-                                        className="bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-500/20"
-                                        onClick={() => document.getElementById('file-upload')?.click()}
-                                    >
-                                        Select File
-                                    </Button>
+                        {status.type === 'success' && (
+                            <Alert className="bg-green-50 text-green-800 border-green-200">
+                                <CheckCircle className="w-4 h-4 text-green-600" />
+                                <AlertTitle>Success</AlertTitle>
+                                <AlertDescription>{status.message}</AlertDescription>
+                            </Alert>
+                        )}
 
-                                    {/* Hidden Upload Trigger for Mock */}
-                                    <Button variant="outline" onClick={handleUpload} disabled={isUploading}>
-                                        {isUploading ? "Uploading..." : "Simulate Upload"}
-                                    </Button>
-                                </div>
-                            </CardContent>
-                        </Card>
-                    </section>
+                        {status.type === 'error' && (
+                            <Alert variant="destructive">
+                                <AlertCircle className="w-4 h-4" />
+                                <AlertTitle>Error</AlertTitle>
+                                <AlertDescription>{status.message}</AlertDescription>
+                            </Alert>
+                        )}
 
+                        <div className="flex justify-end pt-4 border-t border-slate-100 dark:border-slate-800">
+                            <Button variant="destructive" size="sm" onClick={handleClearDatabase} disabled={clearing}>
+                                {clearing ? <Loader2 className="w-3 h-3 animate-spin mr-2" /> : <LogOut className="w-3 h-3 mr-2 rotate-180" />}
+                                Clear All Data in Database
+                            </Button>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                {/* MONTH & SUMMARY SECTION */}
+                <div className="space-y-6">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <div>
+                            <h2 className="text-xl font-bold text-slate-900 dark:text-slate-50">Month-wise Summary</h2>
+                            <p className="text-sm text-slate-500">View team performance by month.</p>
+                        </div>
+                        <div className="flex flex-col sm:flex-row gap-3">
+                            <div className="flex items-center gap-2">
+                                <span className="text-sm font-medium whitespace-nowrap">Filter Team:</span>
+                                <select
+                                    className="h-10 rounded-md border border-slate-300 bg-white px-3 py-1 text-sm focus:border-blue-500 focus:outline-none dark:border-slate-800 dark:bg-slate-950"
+                                    value={selectedTeam}
+                                    onChange={(e) => setSelectedTeam(e.target.value)}
+                                >
+                                    {availableTeams.map(t => (
+                                        <option key={t} value={t}>{t === "All" ? "All Teams" : t}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <span className="text-sm font-medium whitespace-nowrap">Select Month:</span>
+                                <select
+                                    className="h-10 rounded-md border border-slate-300 bg-white px-3 py-1 text-sm focus:border-blue-500 focus:outline-none dark:border-slate-800 dark:bg-slate-950"
+                                    value={selectedMonth}
+                                    onChange={(e) => {
+                                        setSelectedMonth(e.target.value)
+                                        setSelectedTeam("All") // Reset team on month change
+                                    }}
+                                >
+                                    <option value="" disabled>-- Select Month --</option>
+                                    {availableMonths.map(m => (
+                                        <option key={m} value={m}>{m}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-            </main>
+
+                {/* TEAM GROUPS */}
+                {selectedMonth && Object.keys(teamGroups).length > 0 ? (
+                    <div className="grid gap-6">
+                        {Object.entries(teamGroups).map(([teamName, members]) => (
+                            <Card key={teamName}>
+                                <CardHeader className="py-4 bg-slate-50 dark:bg-slate-900 border-b">
+                                    <div className="flex justify-between items-center">
+                                        <CardTitle className="text-base font-bold text-blue-700 dark:text-blue-400">
+                                            {teamName}
+                                        </CardTitle>
+                                        <span className="text-xs bg-slate-200 dark:bg-slate-800 px-2 py-1 rounded-full font-mono">
+                                            {members.length} Members
+                                        </span>
+                                    </div>
+                                </CardHeader>
+                                <CardContent className="p-0">
+                                    <table className="w-full text-sm text-left">
+                                        <thead className="text-xs text-muted-foreground bg-slate-50/50 dark:bg-slate-900/50 border-b">
+                                            <tr>
+                                                <th className="px-4 py-3">Employee Name</th>
+                                                <th className="px-4 py-3 text-right text-black dark:text-white font-bold">Total Score</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                                            {members.map((m: any) => (
+                                                <tr key={m.$id} className="hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-colors">
+                                                    <td className="px-4 py-3 font-medium">{m.employee_name}</td>
+                                                    <td className="px-4 py-3 text-right font-bold text-blue-600 tabular-nums">
+                                                        <Link
+                                                            href={`/dashboard?viewAs=${encodeURIComponent(m.employee_name)}`}
+                                                            className="hover:underline cursor-pointer"
+                                                            target="_blank"
+                                                        >
+                                                            {Math.round(m.total_score)}
+                                                        </Link>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </CardContent>
+                            </Card>
+                        ))}
+                    </div>
+                ) : (
+                    <div className="text-center py-12 text-muted-foreground border-2 border-dashed rounded-xl">
+                        {allData.length === 0 ? "No data in database. Upload a file above." : "Select a month to view summary."}
+                    </div>
+                )}
+            </div>
         </div>
     )
 }

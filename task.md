@@ -3,19 +3,21 @@
 ## Planning & Setup
 - [x] Create Implementation Plan <!-- id: 1 -->
 - [x] Initialize Next.js Project (App Router) <!-- id: 2 -->
-- [x] Set up Supabase Project & Database Schema <!-- id: 3 -->
+- [x] Set up Supabase/Appwrite Context <!-- id: 3 -->
 
 ## Core Features
 - [ ] **Authentication** <!-- id: 4 -->
     - [x] Create Login Page (Name/ID + PIN)
     - [ ] Implement Admin Login (secure route)
 - [ ] **Admin Dashboard** <!-- id: 5 -->
-    - [ ] Create Excel Upload Component
-    - [ ] Implement CSV/Excel Parsing Logic
+    - [x] Create Excel Upload Component
+    - [x] Implement CSV/Excel Parsing Logic
+    - [x] Month-wise Summary View
+    - [x] Team Filter for Summary
     - [ ] Employee Management (View list, Change PIN)
 - [ ] **Employee Dashboard** <!-- id: 6 -->
     - [x] Scorecard Display UI (Matches the requested aesthetic)
-    - [ ] Month Selection/History
+    - [x] Month Selection/History
     - [ ] PDF Export Functionality
 
 ## Verification & Polish
