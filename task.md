@@ -28,5 +28,7 @@
 ## Deployment
 - [x] **Production Build** <!-- id: 10 -->
     - [x] Verify `npm run build` passes
-- [ ] **Hosting** <!-- id: 11 -->
-    - [/] Deploy to Vercel/Netlify (Fixing Suspense Build Error)
+- [x] **Hosting** <!-- id: 11 -->
+    - [x] Deploy to Vercel/Netlify (Fixing Suspense Build Error)
+- [ ] **Post-Deployment** <!-- id: 12 -->
+    - [x] Configure Appwrite Platform (CORS)
