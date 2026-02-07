@@ -7,10 +7,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { Upload, FileSpreadsheet, CheckCircle, AlertCircle, Loader2, LogOut, Settings } from "lucide-react"
+import { Upload, FileSpreadsheet, CheckCircle, AlertCircle, Loader2, LogOut, Settings, LockKeyhole } from "lucide-react"
 import { databases } from "@/lib/appwrite"
 import { ID, Query } from "appwrite"
 import * as XLSX from "xlsx"
+import { ModeToggle } from "@/components/mode-toggle"
 
 const DB_ID = 'scorecards_db_main'
 const COLL_ID = 'employee_scores_main'
@@ -24,6 +25,12 @@ export default function AdminDashboard() {
     const [selectedMonth, setSelectedMonth] = useState<string>("")
     const [selectedTeam, setSelectedTeam] = useState<string>("All")
     const [clearing, setClearing] = useState(false)
+
+    // Password Change State
+    const [showPasswordModal, setShowPasswordModal] = useState(false)
+    const [newPassword, setNewPassword] = useState("")
+    const [confirmPassword, setConfirmPassword] = useState("")
+    const [passwordError, setPasswordError] = useState("")
 
     useEffect(() => {
         fetchAllScorecards()
@@ -89,6 +96,34 @@ export default function AdminDashboard() {
         const dateB = new Date(b + " 1")
         return dateB.getTime() - dateA.getTime() // Newest first
     })
+
+    const handleChangePassword = async () => {
+        if (!newPassword || newPassword !== confirmPassword) {
+            setPasswordError("Passwords do not match or empty")
+            return
+        }
+
+        try {
+            const COLL_CONFIG = 'app_config'
+            // Find existing config
+            const response = await databases.listDocuments(DB_ID, COLL_CONFIG, [Query.equal('key', 'admin_password')])
+
+            if (response.documents.length > 0) {
+                await databases.updateDocument(DB_ID, COLL_CONFIG, response.documents[0].$id, { value: newPassword })
+            } else {
+                await databases.createDocument(DB_ID, COLL_CONFIG, ID.unique(), { key: 'admin_password', value: newPassword })
+            }
+
+            alert("Password Updated Successfully")
+            setShowPasswordModal(false)
+            setNewPassword("")
+            setConfirmPassword("")
+            setPasswordError("")
+        } catch (e: any) {
+            console.error("Password Update Error", e)
+            setPasswordError(e.message || "Failed to update")
+        }
+    }
 
     // Filter by Month first to get relevant teams
     const monthData = allData.filter(d => d.month === selectedMonth)
@@ -184,7 +219,8 @@ export default function AdminDashboard() {
             ua: getIdx(["unauthorised", "unplanned", "leave"]), // Unauthorised Absence
             rca: getIdx(["escalation", "rca"]),
             pii: getIdx(["pii", "shared pii"]),
-            total: getIdx(["total"])
+            total: getIdx(["total"]),
+            club: getIdx(["club", "performance club", "status", "tier", "final status", "club status"])
         }
 
         console.log(`Column Mapping: ${JSON.stringify(idxInfo)}`)
@@ -269,7 +305,8 @@ export default function AdminDashboard() {
                 pii_score: Math.round(pii.score),
                 pii_approval: Math.ceil(Number(pii.val) || 0),
 
-                total_score: Math.round(Number(getVal(idxInfo.total)) || 0)
+                total_score: Math.round(Number(getVal(idxInfo.total)) || 0),
+                performance_club: idxInfo.club !== -1 ? String(row[idxInfo.club]) : "-"
             }
 
             // Upload
@@ -364,39 +401,45 @@ export default function AdminDashboard() {
         <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex font-sans text-slate-900 dark:text-slate-100">
             {/* Sidebar */}
             <aside className="w-64 bg-white dark:bg-slate-950 border-r border-slate-200 dark:border-slate-800 hidden md:flex flex-col">
-                <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-600 to-teal-500 flex items-center justify-center">
-                        <Settings className="w-5 h-5 text-white" />
+                <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex flex-col items-start gap-4">
+                    <div className="w-40 h-12 relative">
+                        <img src="/logo_correct.png" alt="Logo" className="object-contain w-full h-full object-left" />
                     </div>
-                    <span className="font-bold text-lg bg-clip-text text-transparent bg-gradient-to-r from-blue-700 to-teal-600">
+                    <span className="font-extrabold text-2xl bg-clip-text text-transparent bg-gradient-to-r from-blue-700 to-teal-600">
                         Admin Panel
                     </span>
                 </div>
 
                 <nav className="flex-1 p-4 space-y-1">
-                    <Button variant="ghost" className="w-full justify-start text-blue-600 bg-blue-50 dark:bg-blue-900/20 font-medium">
+                    <Button variant="ghost" className="w-full justify-start text-blue-600 bg-blue-50 dark:bg-blue-900/20 font-medium mb-2">
                         <FileSpreadsheet className="w-4 h-4 mr-2" />
                         Scorecard Data
                     </Button>
-                </nav>
-
-                <div className="p-4 border-t border-slate-100 dark:border-slate-800">
-                    <Button variant="ghost" className="w-full justify-start text-red-500 hover:text-red-700 hover:bg-red-50" onClick={() => router.push("/")}>
+                    <Button variant="ghost" className="w-full justify-start text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/10" onClick={() => router.push("/")}>
                         <LogOut className="w-4 h-4 mr-2" />
                         Logout
                     </Button>
-                </div>
+                </nav>
             </aside>
 
             <div className="flex-1 p-8 max-w-5xl mx-auto space-y-8 overflow-y-auto">
-                <header>
-                    <h1 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-100">Dashboard Overview</h1>
-                    <p className="text-muted-foreground">Manage scorecards and employee data.</p>
+                <header className="flex justify-between items-start">
+                    <div>
+                        <h1 className="text-3xl font-extrabold tracking-tight text-gradient-primary">Dashboard Overview</h1>
+                        <p className="text-muted-foreground">Manage scorecards and employee data.</p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                        <ModeToggle />
+                        <Button variant="outline" onClick={() => setShowPasswordModal(true)}>
+                            <LockKeyhole className="w-4 h-4 mr-2" />
+                            Change Password
+                        </Button>
+                    </div>
                 </header>
 
                 <Card>
                     <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
+                        <CardTitle className="flex items-center gap-2 text-gradient-primary font-bold">
                             <FileSpreadsheet className="w-5 h-5 text-green-600" />
                             Upload Scorecard Data
                         </CardTitle>
@@ -457,7 +500,7 @@ export default function AdminDashboard() {
                 <div className="space-y-6">
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                         <div>
-                            <h2 className="text-xl font-bold text-slate-900 dark:text-slate-50">Month-wise Summary</h2>
+                            <h2 className="text-xl font-bold text-gradient-primary">Month-wise Summary</h2>
                             <p className="text-sm text-slate-500">View team performance by month.</p>
                         </div>
                         <div className="flex flex-col sm:flex-row gap-3">
@@ -494,7 +537,8 @@ export default function AdminDashboard() {
                 </div>
 
                 {/* TEAM GROUPS */}
-                {selectedMonth && Object.keys(teamGroups).length > 0 ? (
+                {/* 4. Filter Logic Update: Only show if a specific team is selected (Not "All") */}
+                {selectedMonth && selectedTeam !== "All" && Object.keys(teamGroups).length > 0 ? (
                     <div className="grid gap-6">
                         {Object.entries(teamGroups).map(([teamName, members]) => (
                             <Card key={teamName}>
@@ -538,8 +582,52 @@ export default function AdminDashboard() {
                         ))}
                     </div>
                 ) : (
-                    <div className="text-center py-12 text-muted-foreground border-2 border-dashed rounded-xl">
-                        {allData.length === 0 ? "No data in database. Upload a file above." : "Select a month to view summary."}
+                    <div className="text-center py-24 text-muted-foreground border-2 border-dashed rounded-xl bg-slate-50/50 dark:bg-slate-900/50">
+                        {allData.length === 0
+                            ? "No data in database. Upload a file above."
+                            : !selectedMonth
+                                ? "Select a month to view summary."
+                                : selectedTeam === "All"
+                                    ? "Please select a specific Team to view detailed scores."
+                                    : "No data found for this selection."}
+                    </div>
+                )}
+
+                {/* Password Change Modal */}
+                {showPasswordModal && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in zoom-in duration-200">
+                        <Card className="w-full max-w-sm shadow-2xl border-slate-200 dark:border-slate-800">
+                            <CardHeader>
+                                <CardTitle>Change Admin Password</CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                {passwordError && (
+                                    <div className="p-3 text-sm text-red-600 bg-red-50 rounded-md border border-red-200">
+                                        {passwordError}
+                                    </div>
+                                )}
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium">New Password</label>
+                                    <Input
+                                        type="password"
+                                        value={newPassword}
+                                        onChange={(e) => setNewPassword(e.target.value)}
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium">Confirm Password</label>
+                                    <Input
+                                        type="password"
+                                        value={confirmPassword}
+                                        onChange={(e) => setConfirmPassword(e.target.value)}
+                                    />
+                                </div>
+                                <div className="flex justify-end gap-2 mt-4">
+                                    <Button variant="ghost" onClick={() => setShowPasswordModal(false)}>Cancel</Button>
+                                    <Button onClick={handleChangePassword}>Update</Button>
+                                </div>
+                            </CardContent>
+                        </Card>
                     </div>
                 )}
             </div>

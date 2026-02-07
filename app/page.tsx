@@ -218,7 +218,7 @@ export default function LoginPage() {
                   type="password"
                   maxLength={4}
                   placeholder="• • • •"
-                  className="text-center text-2xl tracking-[0.5em] h-14 font-bold border-blue-100 bg-white focus:ring-blue-400 focus:border-blue-400"
+                  className="text-center text-2xl tracking-[0.5em] h-14 font-bold border-blue-100 bg-white text-slate-900 focus:ring-blue-400 focus:border-blue-400"
                   value={pin}
                   onChange={(e) => setPin(e.target.value.replace(/[^0-9]/g, ''))}
                 />

@@ -24,16 +24,38 @@ export default function AdminLoginPage() {
         setIsLoading(true)
         setError("")
 
-        // Mock Admin Login
-        // In real app, check against Supabase
-        setTimeout(() => {
-            if (userId === "admin" && password === "admin123") {
+        try {
+            // Fetch password from Appwrite
+            // dynamic import to avoid server-side issues if any, or just use the lib
+            const { databases } = await import("@/lib/appwrite")
+            const { Query } = await import("appwrite")
+            const DB_ID = 'scorecards_db_main'
+            const COLL_ID = 'app_config'
+
+            // Fetch stored password
+            const response = await databases.listDocuments(
+                DB_ID,
+                COLL_ID,
+                [Query.equal("key", "admin_password")]
+            )
+
+            // Default fallback if config missing (for safety, though script should have run)
+            const storedPassword = response.documents.length > 0 ? response.documents[0].value : "admin123"
+
+            // Validate
+            // You might want to remove "admin" hardcode too, but user only asked for PW change.
+            if (userId === "admin" && password === storedPassword) {
                 router.push("/admin/dashboard")
             } else {
                 setError("Invalid credentials")
                 setIsLoading(false)
             }
-        }, 1000)
+        } catch (err) {
+            console.error("Login Error", err)
+            // Fallback to hardcoded just in case DB fails? No, better to fail secure.
+            setError("Login failed. System error.")
+            setIsLoading(false)
+        }
     }
 
     return (
@@ -70,7 +92,7 @@ export default function AdminLoginPage() {
                                 <label className="text-xs font-bold text-gray-500 uppercase tracking-wider ml-1">User ID</label>
                                 <Input
                                     placeholder="Enter your ID"
-                                    className="h-12 border-blue-100 bg-blue-50/30 focus:border-blue-400 focus:ring-blue-100 transition-all text-base"
+                                    className="h-12 border-blue-100 bg-blue-50/30 focus:border-blue-400 focus:ring-blue-100 transition-all text-base dark:bg-slate-800 dark:text-white dark:border-slate-700"
                                     value={userId}
                                     onChange={(e) => setUserId(e.target.value)}
                                 />
@@ -81,7 +103,7 @@ export default function AdminLoginPage() {
                                 <Input
                                     type="password"
                                     placeholder="••••••••"
-                                    className="h-12 border-blue-100 bg-blue-50/30 focus:border-blue-400 focus:ring-blue-100 transition-all text-base tracking-widest"
+                                    className="h-12 border-blue-100 bg-blue-50/30 focus:border-blue-400 focus:ring-blue-100 transition-all text-base tracking-widest dark:bg-slate-800 dark:text-white dark:border-slate-700"
                                     value={password}
                                     onChange={(e) => setPassword(e.target.value)}
                                 />
