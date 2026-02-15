@@ -4,13 +4,21 @@ import { useState, useEffect, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Loader2, LogOut, Sun } from "lucide-react"
-import { databases } from "@/lib/appwrite"
-import { Query } from "appwrite"
+import { DB_ID, SCORES_COLLECTION_ID, ACCESS_COLLECTION_ID, databases } from '@/lib/appwrite';
+import { ID, Query } from "appwrite"
 import { ModeToggle } from "@/components/mode-toggle"
 import confetti from "canvas-confetti"
-
-const DB_ID = 'scorecards_db_main'
-const COLL_ID = 'employee_scores_main'
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+} from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 
 const PlatinumWatermark = () => (
     <div className="fixed inset-0 pointer-events-none z-0 flex items-center justify-center overflow-hidden">
@@ -28,6 +36,13 @@ function DashboardContent() {
     const [selectedMonth, setSelectedMonth] = useState<string>("")
     const [monthlyScores, setMonthlyScores] = useState<any[]>([])
     const [loading, setLoading] = useState(true)
+
+    // Change PIN State
+    const [isPinDialogOpen, setIsPinDialogOpen] = useState(false)
+    const [newPin, setNewPin] = useState("")
+    const [confirmPin, setConfirmPin] = useState("")
+    const [pinError, setPinError] = useState("")
+    const [isUpdatingPin, setIsUpdatingPin] = useState(false)
 
     const getOverallClub = (myScore: number) => {
         if (!monthlyScores.length) return "N/A"
@@ -123,7 +138,7 @@ function DashboardContent() {
             setLoading(true)
             const response = await databases.listDocuments(
                 DB_ID,
-                COLL_ID,
+                SCORES_COLLECTION_ID,
                 [Query.equal("employee_name", username)]
             )
             const docs = response.documents
@@ -150,7 +165,7 @@ function DashboardContent() {
             // Fetch all scores for the month to calculate rank
             const response = await databases.listDocuments(
                 DB_ID,
-                COLL_ID,
+                SCORES_COLLECTION_ID,
                 [
                     Query.equal("month", month),
                     Query.limit(1000) // Support up to 1000 employees for ranking
@@ -165,6 +180,61 @@ function DashboardContent() {
     const handleLogout = () => {
         localStorage.removeItem("user_name")
         router.push("/")
+    }
+
+    const handleChangePin = async () => {
+        if (!user) return
+        if (newPin.length !== 4 || isNaN(Number(newPin))) {
+            setPinError("PIN must be exactly 4 digits.")
+            return
+        }
+        if (newPin !== confirmPin) {
+            setPinError("PINs do not match.")
+            return
+        }
+
+        try {
+            setIsUpdatingPin(true)
+            setPinError("")
+            // Check if user already has an entry
+            const response = await databases.listDocuments(
+                DB_ID,
+                ACCESS_COLLECTION_ID,
+                [Query.equal("employee_name", user)]
+            )
+
+            if (response.documents.length > 0) {
+                // Update existing
+                const docId = response.documents[0].$id
+                await databases.updateDocument(
+                    DB_ID,
+                    ACCESS_COLLECTION_ID,
+                    docId,
+                    { pin: newPin }
+                )
+            } else {
+                // Create new
+                await databases.createDocument(
+                    DB_ID,
+                    ACCESS_COLLECTION_ID,
+                    ID.unique(),
+                    {
+                        employee_name: user,
+                        pin: newPin
+                    }
+                )
+            }
+
+            alert("PIN updated successfully!")
+            setIsPinDialogOpen(false)
+            setNewPin("")
+            setConfirmPin("")
+        } catch (error) {
+            console.error("Failed to update PIN", error)
+            setPinError("Failed to update PIN. Please try again.")
+        } finally {
+            setIsUpdatingPin(false)
+        }
     }
 
     // Get current scorecard
@@ -343,6 +413,53 @@ function DashboardContent() {
                     </div>
                     <div className="flex items-center gap-4">
                         <ModeToggle />
+                        <Dialog open={isPinDialogOpen} onOpenChange={setIsPinDialogOpen}>
+                            <DialogTrigger asChild>
+                                <Button variant="outline" className="bg-white dark:bg-slate-800 dark:text-white dark:border-slate-700">Change PIN</Button>
+                            </DialogTrigger>
+                            <DialogContent className="sm:max-w-[425px]">
+                                <DialogHeader>
+                                    <DialogTitle>Change Login PIN</DialogTitle>
+                                    <DialogDescription>
+                                        Set a new 4-digit PIN for your account.
+                                    </DialogDescription>
+                                </DialogHeader>
+                                <div className="grid gap-4 py-4">
+                                    <div className="grid grid-cols-4 items-center gap-4">
+                                        <Label htmlFor="new-pin" className="text-right">
+                                            New PIN
+                                        </Label>
+                                        <Input
+                                            id="new-pin"
+                                            type="password"
+                                            maxLength={4}
+                                            value={newPin}
+                                            onChange={(e) => setNewPin(e.target.value.replace(/[^0-9]/g, ''))}
+                                            className="col-span-3"
+                                        />
+                                    </div>
+                                    <div className="grid grid-cols-4 items-center gap-4">
+                                        <Label htmlFor="confirm-pin" className="text-right">
+                                            Confirm
+                                        </Label>
+                                        <Input
+                                            id="confirm-pin"
+                                            type="password"
+                                            maxLength={4}
+                                            value={confirmPin}
+                                            onChange={(e) => setConfirmPin(e.target.value.replace(/[^0-9]/g, ''))}
+                                            className="col-span-3"
+                                        />
+                                    </div>
+                                    {pinError && <p className="text-red-500 text-sm text-center">{pinError}</p>}
+                                </div>
+                                <DialogFooter>
+                                    <Button type="submit" onClick={handleChangePin} disabled={isUpdatingPin}>
+                                        {isUpdatingPin ? "Updating..." : "Save changes"}
+                                    </Button>
+                                </DialogFooter>
+                            </DialogContent>
+                        </Dialog>
                         <Button variant="outline" onClick={handleLogout} className="bg-white dark:bg-slate-800 dark:text-white dark:border-slate-700">Logout</Button>
                     </div>
                 </div>

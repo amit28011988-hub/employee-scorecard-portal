@@ -8,6 +8,8 @@ import { Input } from "@/components/ui/input"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { UserCog } from "lucide-react"
+import { DB_ID, ACCESS_COLLECTION_ID, databases } from '@/lib/appwrite';
+import { Query } from "appwrite"
 import { ModeToggle } from "@/components/mode-toggle"
 
 // Mock Data for Demo (Will be replaced by Supabase fetch)
@@ -122,18 +124,42 @@ export default function LoginPage() {
     setIsLoading(true)
     setError("")
 
-    // TODO: Supabase Auth Check
-    if (pin === "0000" || pin === "1234") {
-      setTimeout(() => {
+    // Supabase Auth Check
+    try {
+      // 1. Check if user has a custom PIN set
+      const response = await databases.listDocuments(
+        DB_ID,
+        ACCESS_COLLECTION_ID,
+        [Query.equal("employee_name", selectedName)]
+      )
+
+      let isValid = false;
+
+      if (response.documents.length > 0) {
+        // User has a custom PIN
+        const userDoc = response.documents[0]
+        if (userDoc.pin === pin) {
+          isValid = true
+        }
+      } else {
+        // User has NO custom PIN -> Default is "0000"
+        if (pin === "0000") {
+          isValid = true
+        }
+      }
+
+      if (isValid) {
         // Save session (mock)
         localStorage.setItem("user_name", selectedName)
         router.push("/dashboard")
-      }, 1000)
-    } else {
-      setTimeout(() => {
-        setError("Invalid PIN. Default is 0000.")
+      } else {
+        setError("Invalid PIN.")
         setIsLoading(false)
-      }, 1000)
+      }
+    } catch (error) {
+      console.error("Login Error", error)
+      setError("Login failed. Please try again.")
+      setIsLoading(false)
     }
   }
 
