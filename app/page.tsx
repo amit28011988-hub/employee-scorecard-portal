@@ -36,7 +36,7 @@ const DEMO_EMPLOYEES = [
   { name: "Fazal Pathan", team: "Preprocessing" },
   { name: "Arpit Singhal", team: "Preprocessing" },
   { name: "Deepanshu Rawat", team: "Preprocessing" },
-  { name: "Mohd Sameer", team: "Preprocessing" },
+  { name: "Mohd. Sameer", team: "Preprocessing" },
   { name: "Himanshu Chaudhary", team: "Preprocessing" },
   { name: "Deepak Bhardwaj", team: "Preprocessing" },
   { name: "Gaurav Sinha", team: "Preprocessing" },
