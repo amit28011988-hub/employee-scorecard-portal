@@ -402,9 +402,7 @@ export default function AdminDashboard() {
             {/* Sidebar */}
             <aside className="w-64 bg-white dark:bg-slate-950 border-r border-slate-200 dark:border-slate-800 hidden md:flex flex-col">
                 <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex flex-col items-start gap-4">
-                    <div className="w-40 h-12 relative">
-                        <img src="/logo_correct.png" alt="Logo" className="object-contain w-full h-full object-left" />
-                    </div>
+                    {/* Logo removed */}
                     <span className="font-extrabold text-2xl bg-clip-text text-transparent bg-gradient-to-r from-blue-700 to-teal-600">
                         Admin Panel
                     </span>

@@ -335,49 +335,6 @@ function DashboardContent() {
             const pdfWidth = pdf.internal.pageSize.getWidth()
             // const pdfHeight = pdf.internal.pageSize.getHeight() // unused
 
-            // 3. Add Header Logo to PDF
-            // We load the image separately to draw it on the PDF
-            const logoImg = new Image()
-            // Add cache buster to ensure latest image or force reload
-            logoImg.src = "/logo_correct.png"
-            logoImg.crossOrigin = "Anonymous"
-
-            await new Promise((resolve) => {
-                logoImg.onload = resolve
-                logoImg.onerror = (e) => {
-                    console.error("Logo failed to load for PDF", e)
-                    resolve(null) // proceed anyway
-                }
-            })
-
-            // Draw Logo (Left Top) - Maintain Aspect Ratio
-            // Target height: 15mm. Calculate width based on aspect ratio.
-            let logoW = 15;
-            let logoH = 15;
-
-            if (logoImg.naturalWidth > 0 && logoImg.naturalHeight > 0) {
-                const aspect = logoImg.naturalWidth / logoImg.naturalHeight;
-                logoH = 15; // fixed height
-                logoW = logoH * aspect; // proportional width
-                pdf.addImage(logoImg, 'PNG', 10, 10, logoW, logoH)
-            }
-
-            // Draw Title text next to logo (shifted by logo width + margin)
-            pdf.setFontSize(16)
-            pdf.setTextColor(40, 40, 40)
-            // Start text after logo + 5mm gap
-            pdf.text("Performance Scorecard", 10 + logoW + 5, 20)
-
-            // Add Club Status to Header if exists
-            if (currentCard) { // Ensure currentCard exists before accessing properties
-                const overallClub = getOverallClub(currentCard.total_score);
-                if (overallClub && overallClub !== "N/A") {
-                    pdf.setFontSize(12)
-                    pdf.setTextColor(13, 148, 136) // teal
-                    pdf.text(`Club: ${overallClub}`, pdfWidth - 40, 20, { align: 'right' })
-                }
-            }
-
             // 4. Add the Scorecard Image below header
             // Calculate ratio to fit width
             const contentWidth = pdfWidth - 20 // 10mm margin each side
@@ -406,10 +363,7 @@ function DashboardContent() {
                 {/* Top Header */}
                 <div className="flex justify-between items-center mb-8">
                     <div className="flex flex-row items-end gap-4">
-                        <div className="h-24 w-60 relative">
-                            {/* Larger container (Increased again by 15%) */}
-                            <img src="/logo_correct.png" alt="Logo" className="object-contain h-full w-full object-left" />
-                        </div>
+                        {/* Logo removed */}
                     </div>
                     <div className="flex items-center gap-4">
                         <ModeToggle />
