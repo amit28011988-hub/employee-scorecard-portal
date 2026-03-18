@@ -258,13 +258,18 @@ function DashboardContent() {
 
 
     const getClubStatus = (metric: string, value: string | number) => {
-        const val = typeof value === 'string' ? parseFloat(value.replace('%', '')) : value
+        let val = typeof value === 'string' ? parseFloat(value.replace('%', '')) : value
         if (isNaN(val)) return "-"
+
+        // Normalize decimal ratios to percentage scale (0-100+) for Productivity/Quality
+        if ((metric === 'productivity' || metric === 'quality') && val < 2) {
+            val *= 100
+        }
 
         switch (metric) {
             case 'productivity':
                 // Platinum: > 105, Diamond: 100-104.99, Gold: 85-99.99, Silver: 70-84.99, Bronze: < 70
-                if (val > 105) return "Platinum"
+                if (val >= 105) return "Platinum"
                 if (val >= 100) return "Diamond"
                 if (val >= 85) return "Gold"
                 if (val >= 70) return "Silver"
