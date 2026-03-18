@@ -38,18 +38,28 @@ export default function AdminDashboard() {
 
     const fetchAllScorecards = async () => {
         try {
-            // Fetch all documents (limit 100 for now, could paginate)
-            const response = await databases.listDocuments(
-                DB_ID,
-                COLL_ID,
-                [] // Just fetching everything
-            )
-            setAllData(response.documents)
+            // Paginate through ALL documents (Appwrite default limit is 25)
+            const PAGE_SIZE = 100
+            let allDocs: any[] = []
+            let offset = 0
+            let hasMore = true
+
+            while (hasMore) {
+                const response = await databases.listDocuments(
+                    DB_ID,
+                    COLL_ID,
+                    [Query.limit(PAGE_SIZE), Query.offset(offset)]
+                )
+                allDocs = [...allDocs, ...response.documents]
+                offset += PAGE_SIZE
+                hasMore = response.documents.length === PAGE_SIZE
+            }
+
+            setAllData(allDocs)
 
             // Set default month if not set
-            if (response.documents.length > 0 && !selectedMonth) {
-                // Find most common or recent month? Let's pick the first one from unique list
-                const months = Array.from(new Set(response.documents.map((d: any) => d.month)))
+            if (allDocs.length > 0 && !selectedMonth) {
+                const months = Array.from(new Set(allDocs.map((d: any) => d.month)))
                 if (months.length > 0) setSelectedMonth(months[0])
             }
         } catch (error) {
