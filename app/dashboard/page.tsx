@@ -246,14 +246,11 @@ function DashboardContent() {
         if (isNaN(num)) return val
 
         if (isPercentage) {
-            // If value is like 0.81, convert to 81
-            // If value is like 81, keep as 81 (heuristic: if < 1.05 likely decimal ratio for scores, BUT 1.00 could be 1% or 100%.. typically scores are ratios 0-1)
-            // User's screenshot shows 0.81 -> Wants 81%.
-            // Let's assume input is a decimal ratio if less than 1.5 (e.g. 150% is 1.5).
-            // However, some might be entered as "81".
-            // Safer bet based on screenshot: input is 0.81.
-            if (num <= 1) num = num * 100
-            return Math.round(num) + "%" // User asked for 81% not 81.00%
+            // Excel stores percentages as decimals (e.g., 118.49% → 1.1849, 51.67% → 0.5167)
+            // If value is a decimal ratio (< 2), convert to percentage by multiplying by 100
+            // Values >= 2 are already in percentage form (e.g., 99.60 means 99.60%)
+            if (num < 2) num = num * 100
+            return num.toFixed(2) + "%"
         }
 
         return Number(num.toFixed(2))
@@ -562,7 +559,7 @@ function DashboardContent() {
                                         <td className="px-6 py-4 font-medium text-slate-900 dark:text-slate-100">Attendance</td>
                                         <td className="px-6 py-4 text-slate-500 dark:text-slate-400">100%</td>
                                         <td className="px-6 py-4 text-slate-500 dark:text-slate-400">5</td>
-                                        <td className="px-6 py-4 font-bold text-slate-800 dark:text-slate-200">{currentCard.attendance_value}%</td>
+                                        <td className="px-6 py-4 font-bold text-slate-800 dark:text-slate-200">{Number(currentCard.attendance_value).toFixed(2)}%</td>
                                         <td className="px-6 py-4 font-bold text-slate-900 dark:text-slate-100 text-lg">{Math.round(currentCard.attendance_score)}</td>
                                         <td className="px-6 py-4 text-right text-slate-400 dark:text-slate-500">-</td>
                                     </tr>

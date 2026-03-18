@@ -257,11 +257,11 @@ export default function AdminDashboard() {
             // For metrics like Prod/Quality, the screenshot shows [Value, Score]. 
             // We want the Score (Col+1) for the 'score' field, and Value (Col) for 'achieved'
             const getMetricPair = (baseIdx: number) => {
-                if (baseIdx === -1) return { score: 0, val: "0" }
-                const val = row[baseIdx] // The raw % or count
+                if (baseIdx === -1) return { score: 0, val: 0 }
+                const val = row[baseIdx] // The raw % or count (keep original type for proper conversion)
                 const score = row[baseIdx + 1] // The adjacent cell seems to be the score based on logs
                 return {
-                    val: val !== undefined ? String(val) : "0",
+                    val: val !== undefined ? val : 0,
                     score: typeof score === 'number' ? score : Number(score) || 0
                 }
             }
