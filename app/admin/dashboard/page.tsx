@@ -574,7 +574,7 @@ export default function AdminDashboard() {
                                                     <td className="px-4 py-3 font-medium">{m.employee_name}</td>
                                                     <td className="px-4 py-3 text-right font-bold text-blue-600 tabular-nums">
                                                         <Link
-                                                            href={`/dashboard?viewAs=${encodeURIComponent(m.employee_name)}`}
+                                                            href={`/dashboard?viewAs=${encodeURIComponent(m.employee_name)}&month=${encodeURIComponent(selectedMonth)}`}
                                                             className="hover:underline cursor-pointer"
                                                             target="_blank"
                                                         >

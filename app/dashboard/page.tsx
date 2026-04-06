@@ -114,14 +114,19 @@ function DashboardContent() {
 
     useEffect(() => {
         const viewAsUser = searchParams.get("viewAs")
+        const monthParam = searchParams.get("month")
         const storedUser = localStorage.getItem("user_name")
+
+        if (monthParam) {
+            setSelectedMonth(monthParam)
+        }
 
         if (viewAsUser) {
             setUser(viewAsUser)
-            fetchData(viewAsUser)
+            fetchData(viewAsUser, monthParam || undefined)
         } else if (storedUser) {
             setUser(storedUser)
-            fetchData(storedUser)
+            fetchData(storedUser, monthParam || undefined)
         } else {
             router.push("/")
         }
@@ -133,7 +138,7 @@ function DashboardContent() {
         }
     }, [selectedMonth])
 
-    const fetchData = async (username: string) => {
+    const fetchData = async (username: string, monthOverride?: string) => {
         try {
             setLoading(true)
             const response = await databases.listDocuments(
@@ -144,10 +149,10 @@ function DashboardContent() {
             const docs = response.documents
             setScorecards(docs)
 
-            // Default to most recent month
-            if (docs.length > 0 && !selectedMonth) {
-                // Sort by date logic (custom sort since month is string)
-                // Assuming format "Month Year" e.g., "January 2026"
+            // Use month from URL if provided, otherwise default to most recent
+            if (monthOverride && docs.some(d => d.month === monthOverride)) {
+                setSelectedMonth(monthOverride)
+            } else if (docs.length > 0 && !selectedMonth) {
                 const sorted = [...docs].sort((a, b) => {
                     return new Date(b.month).getTime() - new Date(a.month).getTime()
                 })
