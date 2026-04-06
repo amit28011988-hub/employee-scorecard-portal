@@ -117,10 +117,6 @@ function DashboardContent() {
         const monthParam = searchParams.get("month")
         const storedUser = localStorage.getItem("user_name")
 
-        if (monthParam) {
-            setSelectedMonth(monthParam)
-        }
-
         if (viewAsUser) {
             setUser(viewAsUser)
             fetchData(viewAsUser, monthParam || undefined)
@@ -152,7 +148,7 @@ function DashboardContent() {
             // Use month from URL if provided, otherwise default to most recent
             if (monthOverride && docs.some(d => d.month === monthOverride)) {
                 setSelectedMonth(monthOverride)
-            } else if (docs.length > 0 && !selectedMonth) {
+            } else if (docs.length > 0) {
                 const sorted = [...docs].sort((a, b) => {
                     return new Date(b.month).getTime() - new Date(a.month).getTime()
                 })
