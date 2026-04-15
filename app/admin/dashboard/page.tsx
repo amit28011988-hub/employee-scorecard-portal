@@ -28,6 +28,10 @@ export default function AdminDashboard() {
     const [clearingMonth, setClearingMonth] = useState(false)
     const [monthToClear, setMonthToClear] = useState<string>("")
 
+    // Confirmation Modal State
+    const [showConfirmModal, setShowConfirmModal] = useState(false)
+    const [confirmAction, setConfirmAction] = useState<{ title: string, message: string, onConfirm: () => void } | null>(null)
+
     // Password Change State
     const [showPasswordModal, setShowPasswordModal] = useState(false)
     const [newPassword, setNewPassword] = useState("")
@@ -69,8 +73,20 @@ export default function AdminDashboard() {
         }
     }
 
-    const handleClearDatabase = async () => {
-        if (!confirm("ARE YOU SURE? This will delete ALL scorecard data. This cannot be undone.")) return
+    const requestClearDatabase = () => {
+        setConfirmAction({
+            title: "⚠️ Clear ALL Data",
+            message: "ARE YOU SURE? This will delete ALL scorecard data for ALL months (Jan, Feb, March, etc.). This cannot be undone.",
+            onConfirm: () => {
+                setShowConfirmModal(false)
+                setConfirmAction(null)
+                executeClearDatabase()
+            }
+        })
+        setShowConfirmModal(true)
+    }
+
+    const executeClearDatabase = async () => {
 
         setClearing(true)
         try {
@@ -102,13 +118,24 @@ export default function AdminDashboard() {
     }
 
     // --- CLEAR SPECIFIC MONTH DATA ---
-    const handleClearMonthData = async (month: string) => {
+    const requestClearMonthData = (month: string) => {
         if (!month) {
             setStatus({ type: 'error', message: "Please select a month to clear." })
             return
         }
-        if (!confirm(`This will delete ALL scorecard data for "${month}" only. Jan, Feb and other months will NOT be affected. Continue?`)) return
+        setConfirmAction({
+            title: `🗓️ Clear ${month} Data`,
+            message: `This will delete ALL scorecard data for "${month}" only. Other months (Jan, Feb, etc.) will NOT be affected. Continue?`,
+            onConfirm: () => {
+                setShowConfirmModal(false)
+                setConfirmAction(null)
+                executeClearMonthData(month)
+            }
+        })
+        setShowConfirmModal(true)
+    }
 
+    const executeClearMonthData = async (month: string) => {
         setClearingMonth(true)
         setProgress(`Clearing data for ${month}...`)
         try {
@@ -580,7 +607,7 @@ export default function AdminDashboard() {
                                         className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium h-9 px-3 border border-amber-400 text-amber-700 bg-white hover:bg-amber-100 dark:border-amber-700 dark:text-amber-400 dark:bg-slate-950 dark:hover:bg-amber-900/30 disabled:pointer-events-none disabled:opacity-50 transition-colors"
                                         onClick={() => {
                                             console.log("Clear month clicked, monthToClear:", monthToClear)
-                                            handleClearMonthData(monthToClear)
+                                            requestClearMonthData(monthToClear)
                                         }}
                                         disabled={clearingMonth || !monthToClear}
                                     >
@@ -593,7 +620,7 @@ export default function AdminDashboard() {
                             <p className="text-xs text-center text-muted-foreground">— OR —</p>
 
                             <div className="flex justify-end">
-                                <Button variant="destructive" size="sm" onClick={handleClearDatabase} disabled={clearing}>
+                                <Button variant="destructive" size="sm" onClick={requestClearDatabase} disabled={clearing}>
                                     {clearing ? <Loader2 className="w-3 h-3 animate-spin mr-2" /> : <LogOut className="w-3 h-3 mr-2 rotate-180" />}
                                     Clear All Data in Database
                                 </Button>
@@ -738,6 +765,30 @@ export default function AdminDashboard() {
                                 <div className="flex justify-end gap-2 mt-4">
                                     <Button variant="ghost" onClick={() => setShowPasswordModal(false)}>Cancel</Button>
                                     <Button onClick={handleChangePassword}>Update</Button>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    </div>
+                )}
+
+                {/* Confirmation Modal (replaces browser confirm()) */}
+                {showConfirmModal && confirmAction && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" style={{ animation: 'fadeIn 0.2s ease-out' }}>
+                        <Card className="w-full max-w-md shadow-2xl border-slate-200 dark:border-slate-800">
+                            <CardHeader className="pb-3">
+                                <CardTitle className="text-lg">{confirmAction.title}</CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                <p className="text-sm text-muted-foreground leading-relaxed">
+                                    {confirmAction.message}
+                                </p>
+                                <div className="flex justify-end gap-3 pt-2">
+                                    <Button variant="ghost" onClick={() => { setShowConfirmModal(false); setConfirmAction(null) }}>
+                                        Cancel
+                                    </Button>
+                                    <Button variant="destructive" onClick={confirmAction.onConfirm}>
+                                        Yes, Proceed
+                                    </Button>
                                 </div>
                             </CardContent>
                         </Card>
