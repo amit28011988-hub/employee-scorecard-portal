@@ -1,0 +1,32 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find /d/.gemini/antigravity/scratch/employee-scorecard-portal/src -type f \\\\\\(-name *.tsx -o -name *.ts \\\\\\))",
+      "Bash(find /d/.gemini/antigravity/scratch/employee-scorecard-portal -path */api/* -type f \\\\\\(-name *.tsx -o -name *.ts -o -name *.js \\\\\\))",
+      "Bash(grep -r Query. /d/.gemini/antigravity/scratch/employee-scorecard-portal/app --include=*.tsx --include=*.ts)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(where netlify:*)",
+      "Bash(npm list:*)",
+      "Bash(npm run:*)",
+      "Bash(netlify deploy:*)",
+      "Bash(netlify status:*)",
+      "Bash(netlify sites:create --name employee-scorecard-portal)",
+      "Bash(netlify api:*)",
+      "Bash(npx @netlify/plugin-nextjs)",
+      "Bash(netlify env:set NEXT_PUBLIC_APPWRITE_PROJECT_ID \"6985087b00129826ee02\")",
+      "Bash(netlify env:set NEXT_PUBLIC_APPWRITE_PROJECT_NAME \"Employee Scorecard\")",
+      "Bash(netlify env:set NEXT_PUBLIC_APPWRITE_ENDPOINT \"https://sgp.cloud.appwrite.io/v1\")",
+      "Bash(grep -r \"PIN\\\\|pin\\\\|Login failed\" D:.geminiantigravityscratchemployee-scorecard-portal --include=*.tsx --include=*.ts --include=*.jsx --include=*.js --exclude-dir=node_modules --exclude-dir=.next --exclude-dir=.netlify)",
+      "Bash(node -e \":*)",
+      "Bash(node -e \"const pkg = require\\(''./node_modules/appwrite/package.json''\\); console.log\\(''appwrite web SDK version:'', pkg.version\\);\")",
+      "Bash(curl -s -X GET \"https://sgp.cloud.appwrite.io/v1/databases/scorecards_db_main/collections/employee_access/documents?queries[]=%7B%22method%22%3A%22equal%22%2C%22attribute%22%3A%22employee_name%22%2C%22values%22%3A%5B%22Gaurav%20Sinha%22%5D%7D\" -H \"X-Appwrite-Project: 6985087b00129826ee02\" -H \"Content-Type: application/json\")",
+      "Bash(curl -s -X POST http://localhost:3001/api/auth/login -H \"Content-Type: application/json\" -d '{\"\"employee_name\"\":\"\"Gaurav Sinha\"\",\"\"pin\"\":\"\"1234\"\"}')",
+      "Bash(curl -s -X POST http://localhost:3001/api/auth/login -H \"Content-Type: application/json\" -d '{\"\"employee_name\"\":\"\"Gaurav Sinha\"\",\"\"pin\"\":\"\"9525\"\"}')",
+      "Bash(node -e \"const { Query } = require\\(''node-appwrite''\\); console.log\\(typeof Query.equal\\); console.log\\(Query.equal\\(''name'',''test''\\)\\);\")",
+      "Bash(curl -s -X POST http://localhost:3002/api/auth/login -H \"Content-Type: application/json\" -d '{\"\"employee_name\"\":\"\"Gaurav Sinha\"\",\"\"pin\"\":\"\"9525\"\"}')",
+      "Bash(curl -s -X POST http://localhost:3002/api/auth/login -H \"Content-Type: application/json\" -d '{\"\"employee_name\"\":\"\"Gaurav Sinha\"\",\"\"pin\"\":\"\"1234\"\"}')",
+      "Bash(curl -s -X POST http://localhost:3002/api/auth/login -H \"Content-Type: application/json\" -d '{\"\"employee_name\"\":\"\"SomeNewUser\"\",\"\"pin\"\":\"\"0000\"\"}')",
+      "Bash(npx kill-port:*)"
+    ]
+  }
+}

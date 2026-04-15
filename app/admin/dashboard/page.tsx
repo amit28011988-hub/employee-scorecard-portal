@@ -25,6 +25,8 @@ export default function AdminDashboard() {
     const [selectedMonth, setSelectedMonth] = useState<string>("")
     const [selectedTeam, setSelectedTeam] = useState<string>("All")
     const [clearing, setClearing] = useState(false)
+    const [clearingMonth, setClearingMonth] = useState(false)
+    const [monthToClear, setMonthToClear] = useState<string>("")
 
     // Password Change State
     const [showPasswordModal, setShowPasswordModal] = useState(false)
@@ -96,6 +98,56 @@ export default function AdminDashboard() {
             setStatus({ type: 'error', message: "Failed to clear: " + error.message })
         } finally {
             setClearing(false)
+        }
+    }
+
+    // --- CLEAR SPECIFIC MONTH DATA ---
+    const handleClearMonthData = async (month: string) => {
+        if (!month) {
+            setStatus({ type: 'error', message: "Please select a month to clear." })
+            return
+        }
+        if (!confirm(`This will delete ALL scorecard data for "${month}" only. Jan, Feb and other months will NOT be affected. Continue?`)) return
+
+        setClearingMonth(true)
+        setProgress(`Clearing data for ${month}...`)
+        try {
+            let totalDeleted = 0
+            let hasMore = true
+
+            while (hasMore) {
+                const docs = await databases.listDocuments(
+                    DB_ID,
+                    COLL_ID,
+                    [Query.equal("month", month), Query.limit(100)]
+                )
+
+                if (docs.documents.length === 0) {
+                    hasMore = false
+                    break
+                }
+
+                for (const d of docs.documents) {
+                    try {
+                        await databases.deleteDocument(DB_ID, COLL_ID, d.$id)
+                        totalDeleted++
+                        setProgress(`Clearing ${month}... Deleted ${totalDeleted} records`)
+                        await new Promise(r => setTimeout(r, 150))
+                    } catch (e) {
+                        console.error("Delete ignored:", e)
+                    }
+                }
+            }
+
+            setStatus({ type: 'success', message: `✅ Cleared ${totalDeleted} records for "${month}". You can now re-upload the revised sheet.` })
+            setProgress("")
+
+            // Refresh data
+            await fetchAllScorecards()
+        } catch (error: any) {
+            setStatus({ type: 'error', message: `Failed to clear month data: ${error.message}` })
+        } finally {
+            setClearingMonth(false)
         }
     }
 
@@ -239,6 +291,8 @@ export default function AdminDashboard() {
 
         let successCount = 0
         let failCount = 0
+        let updateCount = 0
+        let createCount = 0
         const totalRows = rawData.length - 1 // Exclude header
 
         // Iterate Data Rows
@@ -290,6 +344,9 @@ export default function AdminDashboard() {
                 month = d.toLocaleString('default', { month: 'long', year: 'numeric' })
             }
 
+            // Normalize month string to prevent matching issues
+            if (typeof month === 'string') month = month.trim()
+
             const record = {
                 employee_name: String(name).trim(),
                 team: idxInfo.team !== -1 ? String(row[idxInfo.team]) : "General",
@@ -337,10 +394,12 @@ export default function AdminDashboard() {
                     const docId = existingDocs.documents[0].$id
                     await databases.updateDocument(DB_ID, COLL_ID, docId, record)
                     successCount++
+                    updateCount++
                 } else {
                     // CREATE new
                     await databases.createDocument(DB_ID, COLL_ID, ID.unique(), record)
                     successCount++
+                    createCount++
                 }
             } catch (err) {
                 console.error("Row Upload Fail", err)
@@ -351,7 +410,7 @@ export default function AdminDashboard() {
 
         setStatus({
             type: failCount > 0 ? 'error' : 'success',
-            message: `Bulk Import Complete. Success: ${successCount}. Failed: ${failCount}. ${failCount > 0 ? "Check logs." : ""}`
+            message: `Bulk Import Complete. Success: ${successCount} (${createCount} new, ${updateCount} updated). Failed: ${failCount}. ${failCount > 0 ? "Check logs." : ""}`
         })
         setUploading(false)
     }
@@ -495,11 +554,55 @@ export default function AdminDashboard() {
                             </Alert>
                         )}
 
-                        <div className="flex justify-end pt-4 border-t border-slate-100 dark:border-slate-800">
-                            <Button variant="destructive" size="sm" onClick={handleClearDatabase} disabled={clearing}>
-                                {clearing ? <Loader2 className="w-3 h-3 animate-spin mr-2" /> : <LogOut className="w-3 h-3 mr-2 rotate-180" />}
-                                Clear All Data in Database
-                            </Button>
+                        {/* --- CLEAR SPECIFIC MONTH SECTION --- */}
+                        <div className="pt-4 border-t border-slate-100 dark:border-slate-800 space-y-3">
+                            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4">
+                                <h4 className="text-sm font-semibold text-amber-800 dark:text-amber-300 mb-2 flex items-center gap-2">
+                                    <AlertCircle className="w-4 h-4" />
+                                    Re-upload a Revised Sheet?
+                                </h4>
+                                <p className="text-xs text-amber-700 dark:text-amber-400 mb-3">
+                                    To replace a specific month&apos;s data (e.g., revised March sheet), first clear that month&apos;s data below, then re-upload the new file above. <strong>Other months (Jan, Feb, etc.) will NOT be affected.</strong>
+                                </p>
+                                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
+                                    <select
+                                        className="h-9 rounded-md border border-amber-300 dark:border-amber-700 bg-white dark:bg-slate-950 px-3 py-1 text-sm focus:border-amber-500 focus:outline-none min-w-[180px]"
+                                        value={monthToClear}
+                                        onChange={(e) => setMonthToClear(e.target.value)}
+                                    >
+                                        <option value="">-- Select Month to Clear --</option>
+                                        {availableMonths.map(m => (
+                                            <option key={m} value={m}>{m}</option>
+                                        ))}
+                                    </select>
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="border-amber-400 text-amber-700 hover:bg-amber-100 dark:border-amber-700 dark:text-amber-400 dark:hover:bg-amber-900/30"
+                                        onClick={() => handleClearMonthData(monthToClear)}
+                                        disabled={clearingMonth || !monthToClear}
+                                    >
+                                        {clearingMonth ? <Loader2 className="w-3 h-3 animate-spin mr-2" /> : <AlertCircle className="w-3 h-3 mr-2" />}
+                                        Clear Selected Month Only
+                                    </Button>
+                                </div>
+                            </div>
+
+                            <p className="text-xs text-center text-muted-foreground">— OR —</p>
+
+                            <div className="flex justify-end">
+                                <Button variant="destructive" size="sm" onClick={handleClearDatabase} disabled={clearing}>
+                                    {clearing ? <Loader2 className="w-3 h-3 animate-spin mr-2" /> : <LogOut className="w-3 h-3 mr-2 rotate-180" />}
+                                    Clear All Data in Database
+                                </Button>
+                            </div>
+                        </div>
+
+                        {/* TIP: Re-upload notice */}
+                        <div className="mt-3 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                            <p className="text-xs text-blue-700 dark:text-blue-400">
+                                💡 <strong>Tip:</strong> You can also directly re-upload a revised Excel sheet without clearing first. The system will automatically <strong>update</strong> existing records (matched by Employee Name + Month). New employees will be added. However, if someone was <em>removed</em> from the revised sheet, their old record will remain — in that case, clear the month first.
+                            </p>
                         </div>
                     </CardContent>
                 </Card>
