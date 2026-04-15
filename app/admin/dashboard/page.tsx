@@ -575,16 +575,18 @@ export default function AdminDashboard() {
                                             <option key={m} value={m}>{m}</option>
                                         ))}
                                     </select>
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        className="border-amber-400 text-amber-700 hover:bg-amber-100 dark:border-amber-700 dark:text-amber-400 dark:hover:bg-amber-900/30"
-                                        onClick={() => handleClearMonthData(monthToClear)}
+                                    <button
+                                        type="button"
+                                        className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium h-9 px-3 border border-amber-400 text-amber-700 bg-white hover:bg-amber-100 dark:border-amber-700 dark:text-amber-400 dark:bg-slate-950 dark:hover:bg-amber-900/30 disabled:pointer-events-none disabled:opacity-50 transition-colors"
+                                        onClick={() => {
+                                            console.log("Clear month clicked, monthToClear:", monthToClear)
+                                            handleClearMonthData(monthToClear)
+                                        }}
                                         disabled={clearingMonth || !monthToClear}
                                     >
                                         {clearingMonth ? <Loader2 className="w-3 h-3 animate-spin mr-2" /> : <AlertCircle className="w-3 h-3 mr-2" />}
                                         Clear Selected Month Only
-                                    </Button>
+                                    </button>
                                 </div>
                             </div>
 
