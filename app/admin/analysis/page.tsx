@@ -98,7 +98,8 @@ export default function AnalysisPage() {
         const map = new Map<string, { scores: number[]; team: string }>()
         teamFiltered.forEach((d: any) => {
             if (!d.employee_name) return
-            const cur = map.get(d.employee_name) || { scores: [], team: d.team || "" }
+            const cur: { scores: number[]; team: string } =
+                map.get(d.employee_name) || { scores: [], team: d.team || "" }
             cur.scores.push(Number(d.total_score) || 0)
             if (d.team) cur.team = d.team
             map.set(d.employee_name, cur)
