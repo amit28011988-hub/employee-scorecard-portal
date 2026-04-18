@@ -6,8 +6,11 @@ import { ThemeProvider } from "@/components/theme-provider"
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Employee Scorecard Portal",
-  description: "Secure dashboard for employee performance tracking",
+  title: {
+    default: "Podium",
+    template: "%s | Podium",
+  },
+  description: "Podium — track and rank team performance month over month.",
 };
 
 export default function RootLayout({

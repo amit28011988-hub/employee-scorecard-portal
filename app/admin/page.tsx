@@ -125,7 +125,7 @@ export default function AdminLoginPage() {
                 </Card>
 
                 <div className="text-center mt-6">
-                    <a href="/" className="text-sm font-medium text-gray-400 hover:text-blue-500 transition-colors">← Back to Employee Scorecard</a>
+                    <a href="/" className="text-sm font-medium text-gray-400 hover:text-blue-500 transition-colors">← Back to Podium</a>
                 </div>
 
             </motion.div>

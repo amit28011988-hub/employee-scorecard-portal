@@ -424,7 +424,7 @@ function DashboardContent() {
                 {/* Filters Row (Now contains Title + Month Selector) */}
                 <div className="flex justify-between items-end gap-2 mb-4">
                     <div>
-                        <h1 className="text-3xl font-extrabold text-gradient-primary">Scorecard Portal</h1>
+                        <h1 className="text-3xl font-extrabold text-gradient-primary">Podium</h1>
                         <p className="text-slate-500 dark:text-slate-400">Welcome, {user}</p>
                     </div>
 
