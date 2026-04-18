@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { Upload, FileSpreadsheet, CheckCircle, AlertCircle, Loader2, LogOut, Settings, LockKeyhole } from "lucide-react"
+import { Upload, FileSpreadsheet, CheckCircle, AlertCircle, Loader2, LogOut, Settings, LockKeyhole, BarChart3 } from "lucide-react"
 import { databases } from "@/lib/appwrite"
 import { ID, Query } from "appwrite"
 import * as XLSX from "xlsx"
@@ -508,6 +508,10 @@ export default function AdminDashboard() {
                     <Button variant="ghost" className="w-full justify-start text-blue-600 bg-blue-50 dark:bg-blue-900/20 font-medium mb-2">
                         <FileSpreadsheet className="w-4 h-4 mr-2" />
                         Scorecard Data
+                    </Button>
+                    <Button variant="ghost" className="w-full justify-start font-medium mb-2" onClick={() => router.push("/admin/analysis")}>
+                        <BarChart3 className="w-4 h-4 mr-2" />
+                        Analysis
                     </Button>
                     <Button variant="ghost" className="w-full justify-start text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/10" onClick={() => router.push("/")}>
                         <LogOut className="w-4 h-4 mr-2" />
