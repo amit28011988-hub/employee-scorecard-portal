@@ -27,6 +27,7 @@ export default function AdminDashboard() {
     const [clearing, setClearing] = useState(false)
     const [clearingMonth, setClearingMonth] = useState(false)
     const [monthToClear, setMonthToClear] = useState<string>("")
+    const [teamToClear, setTeamToClear] = useState<string>("") // "" = all teams
 
     // Confirmation Modal State
     const [showConfirmModal, setShowConfirmModal] = useState(false)
@@ -117,37 +118,40 @@ export default function AdminDashboard() {
         }
     }
 
-    // --- CLEAR SPECIFIC MONTH DATA ---
-    const requestClearMonthData = (month: string) => {
+    // --- CLEAR SPECIFIC MONTH DATA (optionally scoped to a single team) ---
+    const requestClearMonthData = (month: string, team?: string) => {
         if (!month) {
             setStatus({ type: 'error', message: "Please select a month to clear." })
             return
         }
+        const teamLabel = team ? ` for team "${team}"` : " (all teams)"
         setConfirmAction({
-            title: `🗓️ Clear ${month} Data`,
-            message: `This will delete ALL scorecard data for "${month}" only. Other months (Jan, Feb, etc.) will NOT be affected. Continue?`,
+            title: `🗓️ Clear ${month} Data${teamLabel}`,
+            message: team
+                ? `This will delete scorecard data for "${month}" in team "${team}" only. Other teams and other months will NOT be affected. Continue?`
+                : `This will delete ALL scorecard data for "${month}" across every team. Other months (Jan, Feb, etc.) will NOT be affected. Continue?`,
             onConfirm: () => {
                 setShowConfirmModal(false)
                 setConfirmAction(null)
-                executeClearMonthData(month)
+                executeClearMonthData(month, team)
             }
         })
         setShowConfirmModal(true)
     }
 
-    const executeClearMonthData = async (month: string) => {
+    const executeClearMonthData = async (month: string, team?: string) => {
         setClearingMonth(true)
-        setProgress(`Clearing data for ${month}...`)
+        const scopeLabel = team ? `${team} / ${month}` : month
+        setProgress(`Clearing data for ${scopeLabel}...`)
         try {
             let totalDeleted = 0
             let hasMore = true
 
             while (hasMore) {
-                const docs = await databases.listDocuments(
-                    DB_ID,
-                    COLL_ID,
-                    [Query.equal("month", month), Query.limit(100)]
-                )
+                const queries = [Query.equal("month", month), Query.limit(100)]
+                if (team) queries.unshift(Query.equal("team", team))
+
+                const docs = await databases.listDocuments(DB_ID, COLL_ID, queries)
 
                 if (docs.documents.length === 0) {
                     hasMore = false
@@ -158,7 +162,7 @@ export default function AdminDashboard() {
                     try {
                         await databases.deleteDocument(DB_ID, COLL_ID, d.$id)
                         totalDeleted++
-                        setProgress(`Clearing ${month}... Deleted ${totalDeleted} records`)
+                        setProgress(`Clearing ${scopeLabel}... Deleted ${totalDeleted} records`)
                         await new Promise(r => setTimeout(r, 150))
                     } catch (e) {
                         console.error("Delete ignored:", e)
@@ -166,7 +170,7 @@ export default function AdminDashboard() {
                 }
             }
 
-            setStatus({ type: 'success', message: `✅ Cleared ${totalDeleted} records for "${month}". You can now re-upload the revised sheet.` })
+            setStatus({ type: 'success', message: `✅ Cleared ${totalDeleted} records for "${scopeLabel}". You can now re-upload the revised sheet.` })
             setProgress("")
 
             // Refresh data
@@ -185,6 +189,17 @@ export default function AdminDashboard() {
         const dateB = new Date(b + " 1")
         return dateB.getTime() - dateA.getTime() // Newest first
     })
+
+    // Teams that exist for the month selected to clear — lets admin clear only
+    // one team's records and leave the other teams' data untouched.
+    const teamsForClearMonth = Array.from(
+        new Set(
+            allData
+                .filter(d => !monthToClear || d.month === monthToClear)
+                .map(d => d.team)
+                .filter(Boolean)
+        )
+    ).sort()
 
     const handleChangePassword = async () => {
         if (!newPassword || newPassword !== confirmPassword) {
@@ -593,30 +608,44 @@ export default function AdminDashboard() {
                                     Re-upload a Revised Sheet?
                                 </h4>
                                 <p className="text-xs text-amber-700 dark:text-amber-400 mb-3">
-                                    To replace a specific month&apos;s data (e.g., revised March sheet), first clear that month&apos;s data below, then re-upload the new file above. <strong>Other months (Jan, Feb, etc.) will NOT be affected.</strong>
+                                    To replace a specific month&apos;s data (e.g., revised March sheet), first clear that month&apos;s data below, then re-upload the new file above. <strong>Other months (Jan, Feb, etc.) will NOT be affected.</strong> Optionally scope the clear to a single team to keep other teams&apos; data intact.
                                 </p>
-                                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
+                                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 flex-wrap">
                                     <select
                                         className="h-9 rounded-md border border-amber-300 dark:border-amber-700 bg-white dark:bg-slate-950 px-3 py-1 text-sm focus:border-amber-500 focus:outline-none min-w-[180px]"
                                         value={monthToClear}
-                                        onChange={(e) => setMonthToClear(e.target.value)}
+                                        onChange={(e) => {
+                                            setMonthToClear(e.target.value)
+                                            setTeamToClear("") // reset team when month changes
+                                        }}
                                     >
                                         <option value="">-- Select Month to Clear --</option>
                                         {availableMonths.map(m => (
                                             <option key={m} value={m}>{m}</option>
                                         ))}
                                     </select>
+                                    <select
+                                        className="h-9 rounded-md border border-amber-300 dark:border-amber-700 bg-white dark:bg-slate-950 px-3 py-1 text-sm focus:border-amber-500 focus:outline-none min-w-[160px] disabled:opacity-50"
+                                        value={teamToClear}
+                                        onChange={(e) => setTeamToClear(e.target.value)}
+                                        disabled={!monthToClear || teamsForClearMonth.length === 0}
+                                    >
+                                        <option value="">All Teams</option>
+                                        {teamsForClearMonth.map(t => (
+                                            <option key={t} value={t}>{t}</option>
+                                        ))}
+                                    </select>
                                     <button
                                         type="button"
                                         className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium h-9 px-3 border border-amber-400 text-amber-700 bg-white hover:bg-amber-100 dark:border-amber-700 dark:text-amber-400 dark:bg-slate-950 dark:hover:bg-amber-900/30 disabled:pointer-events-none disabled:opacity-50 transition-colors"
                                         onClick={() => {
-                                            console.log("Clear month clicked, monthToClear:", monthToClear)
-                                            requestClearMonthData(monthToClear)
+                                            console.log("Clear clicked, monthToClear:", monthToClear, "teamToClear:", teamToClear)
+                                            requestClearMonthData(monthToClear, teamToClear || undefined)
                                         }}
                                         disabled={clearingMonth || !monthToClear}
                                     >
                                         {clearingMonth ? <Loader2 className="w-3 h-3 animate-spin mr-2" /> : <AlertCircle className="w-3 h-3 mr-2" />}
-                                        Clear Selected Month Only
+                                        {teamToClear ? `Clear ${teamToClear} for ${monthToClear}` : "Clear Selected Month Only"}
                                     </button>
                                 </div>
                             </div>
