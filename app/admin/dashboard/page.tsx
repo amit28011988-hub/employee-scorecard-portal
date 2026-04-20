@@ -335,15 +335,28 @@ export default function AdminDashboard() {
         let failCount = 0
         let updateCount = 0
         let createCount = 0
+        let skippedEmptyRow = 0
+        let skippedNoName = 0
+        const skippedRowNumbers: number[] = []
         const totalRows = rawData.length - 1 // Exclude header
 
         // Iterate Data Rows
         for (let r = 1; r < rawData.length; r++) {
             const row = rawData[r]
-            if (!row || row.length === 0) continue
+            if (!row || row.length === 0) {
+                skippedEmptyRow++
+                skippedRowNumbers.push(r + 1) // +1 so the number matches Excel's 1-based row labels
+                console.warn(`[Upload] Row ${r + 1} skipped: empty row`)
+                continue
+            }
 
             const name = row[idxInfo.name]
-            if (!name || String(name).trim() === "") continue
+            if (!name || String(name).trim() === "") {
+                skippedNoName++
+                skippedRowNumbers.push(r + 1)
+                console.warn(`[Upload] Row ${r + 1} skipped: no Employee Name. Row data:`, row)
+                continue
+            }
 
             setProgress(`Processing ${r}/${totalRows}: ${name}`)
 
@@ -450,9 +463,14 @@ export default function AdminDashboard() {
             }
         }
 
+        const skippedTotal = skippedEmptyRow + skippedNoName
+        const skippedNote = skippedTotal > 0
+            ? ` Skipped: ${skippedTotal} (${skippedEmptyRow} empty rows, ${skippedNoName} rows with no Employee Name — rows ${skippedRowNumbers.join(', ')}). Open browser console for row details.`
+            : ""
+        const hasIssues = failCount > 0 || skippedTotal > 0
         setStatus({
-            type: failCount > 0 ? 'error' : 'success',
-            message: `Bulk Import Complete. Success: ${successCount} (${createCount} new, ${updateCount} updated). Failed: ${failCount}. ${failCount > 0 ? "Check logs." : ""}`
+            type: hasIssues ? 'error' : 'success',
+            message: `Bulk Import Complete. Success: ${successCount} (${createCount} new, ${updateCount} updated). Failed: ${failCount}.${skippedNote}${failCount > 0 ? " Check logs for failures." : ""}`
         })
         setUploading(false)
     }
