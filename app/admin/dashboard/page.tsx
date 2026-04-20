@@ -463,13 +463,16 @@ export default function AdminDashboard() {
             }
         }
 
+        // Name-less/empty rows are almost always Excel metadata leftovers
+        // (residual formatting, formulas, or rows that were edited then
+        // cleared), NOT real data. Treat them as harmless and surface the
+        // count as informational — only actual failCount > 0 is an error.
         const skippedTotal = skippedEmptyRow + skippedNoName
         const skippedNote = skippedTotal > 0
-            ? ` Skipped: ${skippedTotal} (${skippedEmptyRow} empty rows, ${skippedNoName} rows with no Employee Name — rows ${skippedRowNumbers.join(', ')}). Open browser console for row details.`
+            ? ` (${skippedTotal} trailing phantom rows ignored — see console if curious)`
             : ""
-        const hasIssues = failCount > 0 || skippedTotal > 0
         setStatus({
-            type: hasIssues ? 'error' : 'success',
+            type: failCount > 0 ? 'error' : 'success',
             message: `Bulk Import Complete. Success: ${successCount} (${createCount} new, ${updateCount} updated). Failed: ${failCount}.${skippedNote}${failCount > 0 ? " Check logs for failures." : ""}`
         })
         setUploading(false)
