@@ -16,6 +16,29 @@ import { ModeToggle } from "@/components/mode-toggle"
 const DB_ID = 'scorecards_db_main'
 const COLL_ID = 'employee_scores_main'
 
+const toNumber = (value: any) => {
+    const parsed = typeof value === 'string' ? parseFloat(value.replace('%', '')) : Number(value)
+    return Number.isFinite(parsed) ? parsed : 0
+}
+
+const toPercent = (value: any) => {
+    const parsed = toNumber(value)
+    return parsed < 2 ? parsed * 100 : parsed
+}
+
+const compareScorecards = (a: any, b: any) => {
+    const scoreDiff = Math.round(toNumber(b.total_score)) - Math.round(toNumber(a.total_score))
+    if (scoreDiff !== 0) return scoreDiff
+
+    const qualityDiff = toPercent(b.quality_achieved) - toPercent(a.quality_achieved)
+    if (qualityDiff !== 0) return qualityDiff
+
+    const leaveDiff = toNumber(a.unplanned_leaves_value) - toNumber(b.unplanned_leaves_value)
+    if (leaveDiff !== 0) return leaveDiff
+
+    return String(a.employee_name || '').localeCompare(String(b.employee_name || ''))
+}
+
 export default function AdminDashboard() {
     const router = useRouter()
     const [uploading, setUploading] = useState(false)
@@ -248,13 +271,9 @@ export default function AdminDashboard() {
         teamGroups[team].push(d)
     })
 
-    // Sort each team's members: Highest Score First (Descending), then Name (A-Z)
+    // Sort each team's members by score, then quality, then unplanned leave, then name.
     Object.keys(teamGroups).forEach(team => {
-        teamGroups[team].sort((a, b) => {
-            const scoreDiff = b.total_score - a.total_score // Descending Score
-            if (scoreDiff !== 0) return scoreDiff
-            return a.employee_name.localeCompare(b.employee_name) // Tie-break: Name A-Z
-        })
+        teamGroups[team].sort(compareScorecards)
     })
 
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -319,10 +338,13 @@ export default function AdminDashboard() {
             // Metrics (Base columns, scores are usually adjacent +1)
             prod: getIdx(["productivity"]),
             qual: getIdx(["quality"]),
-            attend: getIdx(["attendance"]),
-            ua: getIdx(["unauthorised", "unplanned", "leave"]), // Unauthorised Absence
+            sched: getIdx(["schedule adherence", "schedule_adherence"]),
+            attend: headers.findIndex(h => h.includes("attendance") && !h.includes("bonus")),
+            bonus: getIdx(["attendance bonus", "attendance_bonus", "attendancebonus", "bonus"]),
+            ua: getIdx(["unauthorised", "unplanned", "unschedule", "leave"]), // Unauthorised / Unscheduled leave
             rca: getIdx(["escalation", "rca"]),
             pii: getIdx(["pii", "shared pii"]),
+            txn: getIdx(["transaction %", "transaction%", "transaction percent", "transaction"]),
             total: getIdx(["total"]),
             club: getIdx(["club", "performance club", "status", "tier", "final status", "club status"])
         }
@@ -378,17 +400,23 @@ export default function AdminDashboard() {
             // Special handling based on data types in screenshot
             const prod = getMetricPair(idxInfo.prod)
             const qual = getMetricPair(idxInfo.qual)
+            const sched = getMetricPair(idxInfo.sched)
 
-            // Attendance: Screenshot shows "Attendance", "AttendanceBonus"
-            // If explicit bonus column exists, use it. Else assume +1
+            // Attendance: if an explicit "Attendance Bonus" column exists, the
+            // base Attendance column has no adjacent score — bonus holds the score.
+            // Otherwise fall back to the legacy layout where score sits at attend+1.
             const attendVal = getVal(idxInfo.attend)
-            const attendScore = (idxInfo.attend !== -1 && row[idxInfo.attend + 1] !== undefined) ? Number(row[idxInfo.attend + 1]) : 0
+            const attendScore = (idxInfo.bonus === -1 && idxInfo.attend !== -1 && row[idxInfo.attend + 1] !== undefined)
+                ? Number(row[idxInfo.attend + 1]) || 0
+                : 0
+            const bonus = getMetricPair(idxInfo.bonus)
 
             // Leaves & RCA: Usually count is value, next col might be score
             // Log shows: "Unauthorised Absence", "Score"
             const ua = getMetricPair(idxInfo.ua)
             const rca = getMetricPair(idxInfo.rca)
             const pii = getMetricPair(idxInfo.pii)
+            const txnVal = getVal(idxInfo.txn)
 
             // Month Fallback
             let month = idxInfo.month !== -1 ? row[idxInfo.month] : ""
@@ -426,6 +454,19 @@ export default function AdminDashboard() {
 
                 pii_score: Math.round(pii.score),
                 pii_approval: Math.ceil(Number(pii.val) || 0),
+
+                // Optional BASF-SLB fields — only sent when the column exists
+                ...(idxInfo.sched !== -1 && {
+                    schedule_adherence_score: Math.round(sched.score),
+                    schedule_adherence_value: String(sched.val ?? "")
+                }),
+                ...(idxInfo.bonus !== -1 && {
+                    attendance_bonus_score: Math.round(bonus.score),
+                    attendance_bonus_value: String(bonus.val ?? "")
+                }),
+                ...(idxInfo.txn !== -1 && {
+                    transaction_percentage: typeof txnVal === 'number' ? (txnVal * 100).toFixed(1) + "%" : String(txnVal)
+                }),
 
                 total_score: Math.round(Number(getVal(idxInfo.total)) || 0),
                 performance_club: idxInfo.club !== -1 ? String(row[idxInfo.club]) : "-"

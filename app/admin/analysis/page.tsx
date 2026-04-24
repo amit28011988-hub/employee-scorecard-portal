@@ -15,6 +15,29 @@ const parseMonth = (m: string): number => {
     return isNaN(d.getTime()) ? 0 : d.getTime()
 }
 
+const toNumber = (value: any) => {
+    const parsed = typeof value === 'string' ? parseFloat(value.replace('%', '')) : Number(value)
+    return Number.isFinite(parsed) ? parsed : 0
+}
+
+const toPercent = (value: any) => {
+    const parsed = toNumber(value)
+    return parsed < 2 ? parsed * 100 : parsed
+}
+
+const compareScorecards = (a: any, b: any) => {
+    const scoreDiff = Math.round(toNumber(b.total_score)) - Math.round(toNumber(a.total_score))
+    if (scoreDiff !== 0) return scoreDiff
+
+    const qualityDiff = toPercent(b.quality_achieved) - toPercent(a.quality_achieved)
+    if (qualityDiff !== 0) return qualityDiff
+
+    const leaveDiff = toNumber(a.unplanned_leaves_value) - toNumber(b.unplanned_leaves_value)
+    if (leaveDiff !== 0) return leaveDiff
+
+    return String(a.employee_name || '').localeCompare(String(b.employee_name || ''))
+}
+
 const clubBadge = (club?: string) => {
     const c = (club || "").toLowerCase()
     if (c === "platinum") return "bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900"
@@ -142,7 +165,7 @@ export default function AnalysisPage() {
         const rankMap = (month: string) => {
             const data = teamFiltered
                 .filter((d: any) => d.month === month)
-                .sort((a: any, b: any) => (Number(b.total_score) || 0) - (Number(a.total_score) || 0))
+                .sort(compareScorecards)
             const m = new Map<string, number>()
             data.forEach((d: any, i: number) => m.set(d.employee_name, i + 1))
             return m

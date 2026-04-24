@@ -20,6 +20,53 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 
+type BasfTier = { club: string; breakUp: string; marks: number; match: (v: number) => boolean }
+const toNumber = (value: any) => {
+    const parsed = typeof value === 'string' ? parseFloat(value.replace('%', '')) : Number(value)
+    return Number.isFinite(parsed) ? parsed : 0
+}
+
+const toPercent = (value: any) => {
+    const parsed = toNumber(value)
+    return parsed < 2 ? parsed * 100 : parsed
+}
+
+const compareScorecards = (a: any, b: any) => {
+    const scoreDiff = Math.round(toNumber(b.total_score)) - Math.round(toNumber(a.total_score))
+    if (scoreDiff !== 0) return scoreDiff
+
+    const qualityDiff = toPercent(b.quality_achieved) - toPercent(a.quality_achieved)
+    if (qualityDiff !== 0) return qualityDiff
+
+    const leaveDiff = toNumber(a.unplanned_leaves_value) - toNumber(b.unplanned_leaves_value)
+    if (leaveDiff !== 0) return leaveDiff
+
+    return String(a.employee_name || '').localeCompare(String(b.employee_name || ''))
+}
+
+const BASF_TIERS: Record<string, BasfTier[]> = {
+    productivity: [
+        { club: 'Bronze',  breakUp: '70% - 84.99%',   marks: 30, match: v => v >= 70 && v < 85 },
+        { club: 'Silver',  breakUp: '85% - 99.99%',   marks: 40, match: v => v >= 85 && v < 100 },
+        { club: 'Gold',    breakUp: '100% - 104.99%', marks: 50, match: v => v >= 100 && v < 105 },
+        { club: 'Diamond', breakUp: '>105%',          marks: 55, match: v => v >= 105 },
+    ],
+    scheduleAdherence: [
+        { club: 'Outstanding',                 breakUp: '0',   marks: 20, match: v => v === 0 },
+        { club: 'Very Good',                   breakUp: '0-1', marks: 10, match: v => v > 0 && v <= 1 },
+        { club: 'Needs Improvement',           breakUp: '1-2', marks: 5,  match: v => v > 1 && v <= 2 },
+        { club: 'Poor / Requires Improvement', breakUp: '>2',  marks: 0,  match: v => v > 2 },
+    ],
+    unscheduledLeave: [
+        { club: 'Outstanding',       breakUp: '0',    marks: 20, match: v => v === 0 },
+        { club: 'Needs Improvement', breakUp: '>= 1', marks: 0,  match: v => v >= 1 },
+    ],
+    rca: [
+        { club: 'Outstanding',       breakUp: '< 1',  marks: 10, match: v => v < 1 },
+        { club: 'Needs Improvement', breakUp: '>= 1', marks: 0,  match: v => v >= 1 },
+    ],
+}
+
 const PlatinumWatermark = () => (
     <div className="fixed inset-0 pointer-events-none z-0 flex items-center justify-center overflow-hidden">
         <div className="opacity-10 dark:opacity-20 transform -rotate-12 scale-[5]">
@@ -44,20 +91,20 @@ function DashboardContent() {
     const [pinError, setPinError] = useState("")
     const [isUpdatingPin, setIsUpdatingPin] = useState(false)
 
-    const getOverallClub = (myScore: number) => {
+    const getOverallClub = (card: any) => {
         if (!monthlyScores.length) return "N/A"
 
-        // 1. Filter out invalid scores and sort descending
-        const validScores = monthlyScores
-            .map(d => Math.round(d.total_score || 0))
-            .sort((a, b) => b - a)
+        const rankedScores = [...monthlyScores].sort(compareScorecards)
 
-        const totalStrength = validScores.length
+        const totalStrength = rankedScores.length
         if (totalStrength === 0) return "N/A"
 
-        // 2. Find my rank (1-based index)
-        // indexOf returns the FIRST occurrence, which handles ties correctly (best rank)
-        const myRank = validScores.indexOf(Math.round(myScore)) + 1 // 1st, 2nd, etc.
+        const myRank = rankedScores.findIndex((scorecard) => {
+            if (card.$id && scorecard.$id === card.$id) return true
+            return scorecard.employee_name === card.employee_name && scorecard.month === card.month
+        }) + 1
+
+        if (myRank === 0) return "N/A"
 
         // 3. Calculate Percentile Rank (lower is better rank)
         // We use position/total. Top 10% means index is within first 10% of items.
@@ -84,7 +131,9 @@ function DashboardContent() {
     const currentCard = scorecards.find(s => s.month === selectedMonth)
 
     // Calculate overall club for effects
-    const overallClub = currentCard ? getOverallClub(Math.round(currentCard.total_score)) : ""
+    // BASF-SLB max club is Diamond (no Platinum)
+    const rawClub = currentCard ? getOverallClub(currentCard) : ""
+    const overallClub = (currentCard?.team === 'BASF-SLB' && rawClub === 'Platinum') ? 'Diamond' : rawClub
 
     useEffect(() => {
         if (overallClub === "Platinum") {
@@ -257,8 +306,7 @@ function DashboardContent() {
         return Number(num.toFixed(2))
     }
 
-
-    const getClubStatus = (metric: string, value: string | number) => {
+    const getClubStatus = (metric: string, value: string | number, team?: string) => {
         let val = typeof value === 'string' ? parseFloat(value.replace('%', '')) : value
         if (isNaN(val)) return "-"
 
@@ -267,22 +315,25 @@ function DashboardContent() {
             val *= 100
         }
 
+        let club: string
         switch (metric) {
             case 'productivity':
                 // Platinum: > 105, Diamond: 100-104.99, Gold: 85-99.99, Silver: 70-84.99, Bronze: < 70
-                if (val >= 105) return "Platinum"
-                if (val >= 100) return "Diamond"
-                if (val >= 85) return "Gold"
-                if (val >= 70) return "Silver"
-                return "Bronze"
+                if (val >= 105) club = "Platinum"
+                else if (val >= 100) club = "Diamond"
+                else if (val >= 85) club = "Gold"
+                else if (val >= 70) club = "Silver"
+                else club = "Bronze"
+                break
 
             case 'quality':
                 // Platinum: 100, Diamond: 99.51-99.99, Gold: 99.00-99.50, Silver: 98.5-98.99, Bronze: < 98.5
-                if (val >= 100) return "Platinum"
-                if (val >= 99.51) return "Diamond"
-                if (val >= 99.00) return "Gold"
-                if (val >= 98.5) return "Silver"
-                return "Bronze"
+                if (val >= 100) club = "Platinum"
+                else if (val >= 99.51) club = "Diamond"
+                else if (val >= 99.00) club = "Gold"
+                else if (val >= 98.5) club = "Silver"
+                else club = "Bronze"
+                break
 
             case 'unscheduled_leave':
                 // Outstanding: 0, Does not meet: >= 1
@@ -302,6 +353,10 @@ function DashboardContent() {
             default:
                 return "-"
         }
+
+        // BASF-SLB max club is Diamond
+        if (team === 'BASF-SLB' && club === 'Platinum') club = 'Diamond'
+        return club
     }
 
     const getClubStyle = (club: string) => {
@@ -354,7 +409,19 @@ function DashboardContent() {
 
     if (!user) return null
 
-
+    // BASF-SLB computed values (safe defaults when currentCard is missing)
+    const isBasfSlb = currentCard?.team === 'BASF-SLB'
+    const basfProdVal = parseFloat(String(currentCard?.productivity_achieved || '0').replace('%', '')) || 0
+    const basfSchedVal = Number(currentCard?.schedule_adherence_value ?? 0)
+    const basfLeaveVal = Number(currentCard?.unplanned_leaves_value ?? 0)
+    const basfRcaVal = Number(currentCard?.rca_value ?? 0)
+    const basfProdTier = BASF_TIERS.productivity.find(t => t.match(basfProdVal))
+    const basfSchedTier = BASF_TIERS.scheduleAdherence.find(t => t.match(basfSchedVal))
+    const basfLeaveTier = BASF_TIERS.unscheduledLeave.find(t => t.match(basfLeaveVal))
+    const basfRcaTier = BASF_TIERS.rca.find(t => t.match(basfRcaVal))
+    const basfNullVoid = basfRcaVal > 2
+    const basfDisplayTotal = basfNullVoid ? 0 : Math.round(currentCard?.total_score || 0)
+    const basfOverallClub = basfProdTier?.club ?? 'Bronze' // BASF-SLB caps at Diamond; no Platinum
 
     return (
         <div className="min-h-screen bg-slate-50 dark:bg-slate-950 transition-colors duration-300 relative overflow-hidden">
@@ -472,7 +539,7 @@ function DashboardContent() {
 
                                     <span className="text-slate-500 dark:text-slate-400">Club:</span>
                                     {(() => {
-                                        const club = getOverallClub(currentCard.total_score)
+                                        const club = overallClub
                                         const style = getClubStyle(club)
                                         return (
                                             <span className={`font-bold flex items-center gap-1 ${style.color}`}>
@@ -488,6 +555,7 @@ function DashboardContent() {
 
                         {/* Main Table */}
                         <div className="overflow-x-auto">
+                            {(
                             <table className="w-full text-sm text-left">
                                 <thead className="text-xs text-white uppercase bg-teal-600 dark:bg-teal-700">
                                     <tr>
@@ -504,35 +572,49 @@ function DashboardContent() {
                                     <tr className="hover:bg-slate-50 dark:hover:bg-slate-900/50">
                                         <td className="px-6 py-4 font-medium text-slate-900 dark:text-slate-100">Productivity</td>
                                         <td className="px-6 py-4 text-slate-500 dark:text-slate-400">&gt;105%</td>
-                                        <td className="px-6 py-4 text-slate-500 dark:text-slate-400">30</td>
+                                        <td className="px-6 py-4 text-slate-500 dark:text-slate-400">{currentCard.team === 'BASF-SLB' ? 55 : 30}</td>
                                         <td className="px-6 py-4 font-bold text-slate-800 dark:text-slate-200">{formatValue(currentCard.productivity_achieved, true)}</td>
                                         <td className="px-6 py-4 font-bold text-slate-900 dark:text-slate-100 text-lg">{Math.round(currentCard.productivity_score)}</td>
                                         <td className="px-6 py-4 text-right font-medium text-blue-600 dark:text-blue-400">
-                                            {getClubStatus('productivity', currentCard.productivity_achieved)}
+                                            {getClubStatus('productivity', currentCard.productivity_achieved, currentCard.team)}
                                         </td>
                                     </tr>
 
-                                    {/* Quality */}
-                                    <tr className="hover:bg-slate-50 dark:hover:bg-slate-900/50">
-                                        <td className="px-6 py-4 font-medium text-slate-900 dark:text-slate-100">Quality</td>
-                                        <td className="px-6 py-4 text-slate-500 dark:text-slate-400">99.00% - 99.50%</td>
-                                        <td className="px-6 py-4 text-slate-500 dark:text-slate-400">40</td>
-                                        <td className="px-6 py-4 font-bold text-slate-800 dark:text-slate-200">{formatValue(currentCard.quality_achieved, true)}</td>
-                                        <td className="px-6 py-4 font-bold text-slate-900 dark:text-slate-100 text-lg">{Math.round(currentCard.quality_score)}</td>
-                                        <td className="px-6 py-4 text-right font-medium text-blue-600 dark:text-blue-400">
-                                            {getClubStatus('quality', currentCard.quality_achieved)}
-                                        </td>
-                                    </tr>
+                                    {/* Quality — hidden for BASF-SLB (not in their sheet) */}
+                                    {currentCard.team !== 'BASF-SLB' && (
+                                        <tr className="hover:bg-slate-50 dark:hover:bg-slate-900/50">
+                                            <td className="px-6 py-4 font-medium text-slate-900 dark:text-slate-100">Quality</td>
+                                            <td className="px-6 py-4 text-slate-500 dark:text-slate-400">99.00% - 99.50%</td>
+                                            <td className="px-6 py-4 text-slate-500 dark:text-slate-400">40</td>
+                                            <td className="px-6 py-4 font-bold text-slate-800 dark:text-slate-200">{formatValue(currentCard.quality_achieved, true)}</td>
+                                            <td className="px-6 py-4 font-bold text-slate-900 dark:text-slate-100 text-lg">{Math.round(currentCard.quality_score)}</td>
+                                            <td className="px-6 py-4 text-right font-medium text-blue-600 dark:text-blue-400">
+                                                {getClubStatus('quality', currentCard.quality_achieved, currentCard.team)}
+                                            </td>
+                                        </tr>
+                                    )}
+
+                                    {/* Schedule Adherence (optional — BASF-SLB) */}
+                                    {currentCard.schedule_adherence_value !== undefined && currentCard.schedule_adherence_value !== "" && (
+                                        <tr className="hover:bg-slate-50 dark:hover:bg-slate-900/50">
+                                            <td className="px-6 py-4 font-medium text-slate-900 dark:text-slate-100">Schedule Adherence</td>
+                                            <td className="px-6 py-4 text-slate-500 dark:text-slate-400">0</td>
+                                            <td className="px-6 py-4 text-slate-500 dark:text-slate-400">20</td>
+                                            <td className="px-6 py-4 font-bold text-slate-800 dark:text-slate-200">{currentCard.schedule_adherence_value}</td>
+                                            <td className="px-6 py-4 font-bold text-slate-900 dark:text-slate-100 text-lg">{Math.round(Number(currentCard.schedule_adherence_score) || 0)}</td>
+                                            <td className="px-6 py-4 text-right text-slate-400 dark:text-slate-500">-</td>
+                                        </tr>
+                                    )}
 
                                     {/* Unscheduled Leave */}
                                     <tr className="hover:bg-slate-50 dark:hover:bg-slate-900/50">
                                         <td className="px-6 py-4 font-medium text-slate-900 dark:text-slate-100">Unscheduled Leave</td>
                                         <td className="px-6 py-4 text-slate-500 dark:text-slate-400">0</td>
-                                        <td className="px-6 py-4 text-slate-500 dark:text-slate-400">10</td>
+                                        <td className="px-6 py-4 text-slate-500 dark:text-slate-400">{currentCard.team === 'BASF-SLB' ? 20 : 10}</td>
                                         <td className="px-6 py-4 font-bold text-slate-800 dark:text-slate-200">{currentCard.unplanned_leaves_value}</td>
                                         <td className="px-6 py-4 font-bold text-slate-900 dark:text-slate-100 text-lg">{Math.round(currentCard.unplanned_leaves_score)}</td>
                                         <td className="px-6 py-4 text-right font-medium text-slate-600 dark:text-slate-400">
-                                            {getClubStatus('unscheduled_leave', currentCard.unplanned_leaves_value)}
+                                            {getClubStatus('unscheduled_leave', currentCard.unplanned_leaves_value, currentCard.team)}
                                         </td>
                                     </tr>
 
@@ -544,31 +626,57 @@ function DashboardContent() {
                                         <td className="px-6 py-4 font-bold text-slate-800 dark:text-slate-200">{currentCard.rca_value}</td>
                                         <td className="px-6 py-4 font-bold text-slate-900 dark:text-slate-100 text-lg">{Math.round(currentCard.rca_score)}</td>
                                         <td className="px-6 py-4 text-right font-medium text-slate-600 dark:text-slate-400">
-                                            {getClubStatus('rca', currentCard.rca_value)}
+                                            {getClubStatus('rca', currentCard.rca_value, currentCard.team)}
                                         </td>
                                     </tr>
 
-                                    {/* Shared PII */}
-                                    <tr className="hover:bg-slate-50 dark:hover:bg-slate-900/50">
-                                        <td className="px-6 py-4 font-medium text-slate-900 dark:text-slate-100">Shared PII</td>
-                                        <td className="px-6 py-4 text-slate-500 dark:text-slate-400">&gt; 1</td>
-                                        <td className="px-6 py-4 text-slate-500 dark:text-slate-400">10</td>
-                                        <td className="px-6 py-4 font-bold text-slate-800 dark:text-slate-200">{currentCard.pii_approval}</td>
-                                        <td className="px-6 py-4 font-bold text-slate-900 dark:text-slate-100 text-lg">{Math.round(currentCard.pii_score)}</td>
-                                        <td className="px-6 py-4 text-right font-medium text-slate-600 dark:text-slate-400">
-                                            {getClubStatus('pii', currentCard.pii_approval)}
-                                        </td>
-                                    </tr>
+                                    {/* Shared PII — hidden for BASF-SLB (not in their sheet) */}
+                                    {currentCard.team !== 'BASF-SLB' && (
+                                        <tr className="hover:bg-slate-50 dark:hover:bg-slate-900/50">
+                                            <td className="px-6 py-4 font-medium text-slate-900 dark:text-slate-100">Shared PII</td>
+                                            <td className="px-6 py-4 text-slate-500 dark:text-slate-400">&gt; 1</td>
+                                            <td className="px-6 py-4 text-slate-500 dark:text-slate-400">10</td>
+                                            <td className="px-6 py-4 font-bold text-slate-800 dark:text-slate-200">{currentCard.pii_approval}</td>
+                                            <td className="px-6 py-4 font-bold text-slate-900 dark:text-slate-100 text-lg">{Math.round(currentCard.pii_score)}</td>
+                                            <td className="px-6 py-4 text-right font-medium text-slate-600 dark:text-slate-400">
+                                                {getClubStatus('pii', currentCard.pii_approval, currentCard.team)}
+                                            </td>
+                                        </tr>
+                                    )}
 
                                     {/* Attendance */}
                                     <tr className="hover:bg-slate-50 dark:hover:bg-slate-900/50">
                                         <td className="px-6 py-4 font-medium text-slate-900 dark:text-slate-100">Attendance</td>
                                         <td className="px-6 py-4 text-slate-500 dark:text-slate-400">100%</td>
-                                        <td className="px-6 py-4 text-slate-500 dark:text-slate-400">5</td>
+                                        <td className="px-6 py-4 text-slate-500 dark:text-slate-400">{currentCard.team === 'BASF-SLB' ? '-' : 5}</td>
                                         <td className="px-6 py-4 font-bold text-slate-800 dark:text-slate-200">{Number(currentCard.attendance_value).toFixed(2)}%</td>
-                                        <td className="px-6 py-4 font-bold text-slate-900 dark:text-slate-100 text-lg">{Math.round(currentCard.attendance_score)}</td>
+                                        <td className="px-6 py-4 font-bold text-slate-900 dark:text-slate-100 text-lg">{currentCard.team === 'BASF-SLB' ? '-' : Math.round(currentCard.attendance_score)}</td>
                                         <td className="px-6 py-4 text-right text-slate-400 dark:text-slate-500">-</td>
                                     </tr>
+
+                                    {/* Attendance Bonus (optional — BASF-SLB) */}
+                                    {currentCard.attendance_bonus_value !== undefined && currentCard.attendance_bonus_value !== "" && (
+                                        <tr className="hover:bg-slate-50 dark:hover:bg-slate-900/50">
+                                            <td className="px-6 py-4 font-medium text-slate-900 dark:text-slate-100">Attendance Bonus</td>
+                                            <td className="px-6 py-4 text-slate-500 dark:text-slate-400">+5</td>
+                                            <td className="px-6 py-4 text-slate-500 dark:text-slate-400">5</td>
+                                            <td className="px-6 py-4 font-bold text-slate-800 dark:text-slate-200">{currentCard.attendance_bonus_value}</td>
+                                            <td className="px-6 py-4 font-bold text-slate-900 dark:text-slate-100 text-lg">{Math.round(Number(currentCard.attendance_bonus_score) || 0)}</td>
+                                            <td className="px-6 py-4 text-right text-slate-400 dark:text-slate-500">-</td>
+                                        </tr>
+                                    )}
+
+                                    {/* Transaction % (optional — BASF-SLB, display only) */}
+                                    {currentCard.transaction_percentage !== undefined && currentCard.transaction_percentage !== "" && (
+                                        <tr className="hover:bg-slate-50 dark:hover:bg-slate-900/50">
+                                            <td className="px-6 py-4 font-medium text-slate-900 dark:text-slate-100">Transaction %</td>
+                                            <td className="px-6 py-4 text-slate-500 dark:text-slate-400">-</td>
+                                            <td className="px-6 py-4 text-slate-500 dark:text-slate-400">-</td>
+                                            <td className="px-6 py-4 font-bold text-slate-800 dark:text-slate-200">{currentCard.transaction_percentage}</td>
+                                            <td className="px-6 py-4 text-slate-400 dark:text-slate-500">-</td>
+                                            <td className="px-6 py-4 text-right text-slate-400 dark:text-slate-500">-</td>
+                                        </tr>
+                                    )}
 
                                 </tbody>
 
@@ -581,7 +689,7 @@ function DashboardContent() {
                                         </td>
                                         <td className="px-6 py-6 text-right">
                                             {(() => {
-                                                const club = getOverallClub(currentCard.total_score)
+                                                const club = overallClub
                                                 const style = getClubStyle(club)
                                                 return (
                                                     <div className={`flex flex-col items-end ${style.color} leading-none`}>
@@ -597,12 +705,15 @@ function DashboardContent() {
                                     </tr>
                                 </tfoot>
                             </table>
+                            )}
                         </div>
 
                         {/* Footer Notes */}
                         <div className="bg-orange-50 dark:bg-orange-950/30 px-6 py-4 text-center border-t border-orange-100 dark:border-orange-900/50">
                             <p className="text-xs font-semibold text-orange-700 dark:text-orange-400">
-                                Points to Note: &gt;2 RCAs = 0 Score. 100% Attendance is top-up.
+                                {isBasfSlb
+                                    ? "Points to Note: More than 2 RCAs in a month = scorecard is NULL & VOID (score = 0). 100% Attendance & Approved PII is a top-up; denominator stays 100."
+                                    : "Points to Note: >2 RCAs = 0 Score. 100% Attendance is top-up."}
                             </p>
                         </div>
                     </div>
