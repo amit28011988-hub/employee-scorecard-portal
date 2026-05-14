@@ -594,8 +594,8 @@ function DashboardContent() {
                                         </tr>
                                     )}
 
-                                    {/* Schedule Adherence (optional — BASF-SLB) */}
-                                    {currentCard.schedule_adherence_value !== undefined && currentCard.schedule_adherence_value !== "" && (
+                                    {/* Schedule Adherence (QA, BASF-SLB, Doc Update only) */}
+                                    {['QA', 'BASF-SLB', 'Doc Update'].includes(currentCard.team) && currentCard.schedule_adherence_value !== undefined && currentCard.schedule_adherence_value !== "" && (
                                         <tr className="hover:bg-slate-50 dark:hover:bg-slate-900/50">
                                             <td className="px-6 py-4 font-medium text-slate-900 dark:text-slate-100">Schedule Adherence</td>
                                             <td className="px-6 py-4 text-slate-500 dark:text-slate-400">0</td>

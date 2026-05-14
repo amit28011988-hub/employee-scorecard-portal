@@ -455,8 +455,8 @@ export default function AdminDashboard() {
                 pii_score: Math.round(pii.score),
                 pii_approval: Math.ceil(Number(pii.val) || 0),
 
-                // Optional BASF-SLB fields — only sent when the column exists
-                ...(idxInfo.sched !== -1 && {
+                // Optional fields — schedule adherence only for QA, BASF-SLB, Doc Update
+                ...(idxInfo.sched !== -1 && ['QA', 'BASF-SLB', 'Doc Update'].includes(idxInfo.team !== -1 ? String(row[idxInfo.team]) : '') && {
                     schedule_adherence_score: Math.round(sched.score),
                     schedule_adherence_value: String(sched.val ?? "")
                 }),
