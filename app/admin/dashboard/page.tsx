@@ -791,14 +791,24 @@ export default function AdminDashboard() {
                                     <table className="w-full text-sm text-left">
                                         <thead className="text-xs text-muted-foreground bg-slate-50/50 dark:bg-slate-900/50 border-b">
                                             <tr>
+                                                <th className="px-4 py-3 w-10 text-center">#</th>
                                                 <th className="px-4 py-3">Employee Name</th>
                                                 <th className="px-4 py-3 text-right text-black dark:text-white font-bold">Total Score</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                                            {members.map((m: any) => (
-                                                <tr key={m.$id} className="hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-colors">
-                                                    <td className="px-4 py-3 font-medium">{m.employee_name}</td>
+                                            {members.map((m: any, idx: number) => (
+                                                <tr key={m.$id} className={`hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-colors ${idx === 0 ? 'bg-amber-50/50 dark:bg-amber-900/10' : ''}`}>
+                                                    <td className="px-4 py-3 text-center font-bold text-slate-400 tabular-nums">
+                                                        {idx === 0 ? <span title="Champion" className="text-base">🏆</span>
+                                                         : idx === 1 ? <span className="text-base">🥈</span>
+                                                         : idx === 2 ? <span className="text-base">🥉</span>
+                                                         : <span>{idx + 1}</span>}
+                                                    </td>
+                                                    <td className="px-4 py-3 font-medium">
+                                                        {m.employee_name}
+                                                        {idx === 0 && <span className="ml-2 text-[10px] bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">Champion</span>}
+                                                    </td>
                                                     <td className="px-4 py-3 text-right font-bold text-blue-600 tabular-nums">
                                                         <Link
                                                             href={`/dashboard?viewAs=${encodeURIComponent(m.employee_name)}&month=${encodeURIComponent(selectedMonth)}`}
