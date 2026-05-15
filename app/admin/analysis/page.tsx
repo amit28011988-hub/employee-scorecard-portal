@@ -96,7 +96,7 @@ export default function AnalysisPage() {
             const ranked = [...docs].sort(compareScorecards)
             const total = ranked.length
             ranked.forEach((d, idx) => {
-                const percentile = ((idx + 1) / total) * 100
+                const percentile = (idx / total) * 100
                 let club = "Bronze"
                 if (percentile <= 5) club = "Platinum"
                 else if (percentile <= 15) club = "Diamond"

@@ -106,9 +106,8 @@ function DashboardContent() {
 
         if (myRank === 0) return "N/A"
 
-        // 3. Calculate Percentile Rank (lower is better rank)
-        // We use position/total. Top 10% means index is within first 10% of items.
-        const percentile = (myRank / totalStrength) * 100
+        // 3. Calculate Percentile Rank (0-based so rank #1 = 0th percentile)
+        const percentile = ((myRank - 1) / totalStrength) * 100
 
         // 4. Determine Club
         // Platinum: Top 5%
