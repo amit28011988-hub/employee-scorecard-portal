@@ -131,9 +131,8 @@ function DashboardContent() {
     const currentCard = scorecards.find(s => s.month === selectedMonth)
 
     // Calculate overall club for effects
-    // BASF-SLB max club is Diamond (no Platinum)
     const rawClub = currentCard ? getOverallClub(currentCard) : ""
-    const overallClub = (currentCard?.team === 'BASF-SLB' && rawClub === 'Platinum') ? 'Diamond' : rawClub
+    const overallClub = rawClub
 
     useEffect(() => {
         if (overallClub === "Platinum") {
@@ -354,8 +353,6 @@ function DashboardContent() {
                 return "-"
         }
 
-        // BASF-SLB max club is Diamond
-        if (team === 'BASF-SLB' && club === 'Platinum') club = 'Diamond'
         return club
     }
 

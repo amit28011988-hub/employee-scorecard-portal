@@ -82,15 +82,41 @@ export default function AnalysisPage() {
         }
     }
 
-    const availableTeams = useMemo(() => {
-        const set = new Set<string>()
-        allData.forEach((d: any) => d.team && set.add(d.team))
-        return ["All", ...Array.from(set).sort()]
+    // Compute percentile-based club for each scorecard (same logic as employee dashboard)
+    const enrichedData = useMemo(() => {
+        // Group by month, rank within each month, assign club by percentile
+        const byMonth = new Map<string, any[]>()
+        allData.forEach((d: any) => {
+            const m = d.month || ""
+            if (!byMonth.has(m)) byMonth.set(m, [])
+            byMonth.get(m)!.push(d)
+        })
+        const clubMap = new Map<string, string>() // keyed by $id
+        byMonth.forEach((docs) => {
+            const ranked = [...docs].sort(compareScorecards)
+            const total = ranked.length
+            ranked.forEach((d, idx) => {
+                const percentile = ((idx + 1) / total) * 100
+                let club = "Bronze"
+                if (percentile <= 10) club = "Platinum"
+                else if (percentile <= 25) club = "Diamond"
+                else if (percentile <= 75) club = "Gold"
+                else if (percentile <= 90) club = "Silver"
+                clubMap.set(d.$id, club)
+            })
+        })
+        return allData.map((d: any) => ({ ...d, computed_club: clubMap.get(d.$id) || d.performance_club || "-" }))
     }, [allData])
 
+    const availableTeams = useMemo(() => {
+        const set = new Set<string>()
+        enrichedData.forEach((d: any) => d.team && set.add(d.team))
+        return ["All", ...Array.from(set).sort()]
+    }, [enrichedData])
+
     const teamFiltered = useMemo(() => {
-        return selectedTeam === "All" ? allData : allData.filter((d: any) => d.team === selectedTeam)
-    }, [allData, selectedTeam])
+        return selectedTeam === "All" ? enrichedData : enrichedData.filter((d: any) => d.team === selectedTeam)
+    }, [enrichedData, selectedTeam])
 
     const employeeNames = useMemo(() => {
         const set = new Set<string>()
@@ -112,7 +138,7 @@ export default function AnalysisPage() {
             .map((d: any) => ({
                 month: d.month as string,
                 score: Math.round(Number(d.total_score) || 0),
-                club: d.performance_club as string | undefined,
+                club: d.computed_club as string | undefined,
             }))
             .sort((a, b) => parseMonth(a.month) - parseMonth(b.month))
     }, [teamFiltered, selectedEmployee])
@@ -142,7 +168,7 @@ export default function AnalysisPage() {
         teamFiltered.forEach((d: any) => {
             if (!d.employee_name) return
             const cur = map.get(d.employee_name) || { platinum: 0, diamond: 0, gold: 0, team: d.team || "" }
-            const c = (d.performance_club || "").toLowerCase()
+            const c = (d.computed_club || "").toLowerCase()
             if (c === "platinum") cur.platinum++
             else if (c === "diamond") cur.diamond++
             else if (c === "gold") cur.gold++
