@@ -40,7 +40,7 @@ export default function AdminLoginPage() {
             )
 
             // Default fallback if config missing (for safety, though script should have run)
-            const storedPassword = response.documents.length > 0 ? response.documents[0].value : "admin123"
+            const storedPassword = response.documents.length > 0 ? response.documents[0].value : "Bluesky@2026"
 
             // Validate
             // You might want to remove "admin" hardcode too, but user only asked for PW change.

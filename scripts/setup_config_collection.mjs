@@ -50,9 +50,9 @@ async function setupConfig() {
             if (!adminConfig) {
                 await databases.createDocument(DB_ID, COLL_ID, ID.unique(), {
                     key: 'admin_password',
-                    value: 'admin123'
+                    value: 'Bluesky@2026'
                 });
-                console.log('✅ Default Admin Password Set: admin123');
+                console.log('✅ Default Admin Password Set: Bluesky@2026');
             } else {
                 console.log('ℹ️ Admin Password already configured.');
             }
