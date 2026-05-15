@@ -111,19 +111,19 @@ function DashboardContent() {
         const percentile = (myRank / totalStrength) * 100
 
         // 4. Determine Club
-        // Platinum: Top 10%
-        if (percentile <= 10) return "Platinum"
+        // Platinum: Top 5%
+        if (percentile <= 5) return "Platinum"
 
-        // Diamond: Top 15% (Next 15% -> up to 25%)
-        if (percentile <= 25) return "Diamond"
+        // Diamond: Next 10% (up to 15%)
+        if (percentile <= 15) return "Diamond"
 
-        // Gold: Middle 50% (Next 50% -> up to 75%)
+        // Gold: Next 60% (up to 75%)
         if (percentile <= 75) return "Gold"
 
-        // Silver: Bottom 15% (Next 15% -> up to 90%)
-        if (percentile <= 90) return "Silver"
+        // Silver: Next 10% (up to 85%)
+        if (percentile <= 85) return "Silver"
 
-        // Bronze: Bottom 10%
+        // Bronze: Bottom 15%
         return "Bronze"
     }
 

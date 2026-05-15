@@ -98,10 +98,10 @@ export default function AnalysisPage() {
             ranked.forEach((d, idx) => {
                 const percentile = ((idx + 1) / total) * 100
                 let club = "Bronze"
-                if (percentile <= 10) club = "Platinum"
-                else if (percentile <= 25) club = "Diamond"
+                if (percentile <= 5) club = "Platinum"
+                else if (percentile <= 15) club = "Diamond"
                 else if (percentile <= 75) club = "Gold"
-                else if (percentile <= 90) club = "Silver"
+                else if (percentile <= 85) club = "Silver"
                 clubMap.set(d.$id, club)
             })
         })
