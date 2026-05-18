@@ -662,7 +662,7 @@ function DashboardContent() {
                                             <td className="px-6 py-4 text-slate-500 dark:text-slate-400">+5</td>
                                             <td className="px-6 py-4 text-slate-500 dark:text-slate-400">5</td>
                                             <td className="px-6 py-4 font-bold text-slate-800 dark:text-slate-200">{currentCard.attendance_bonus_value}</td>
-                                            <td className="px-6 py-4 font-bold text-slate-900 dark:text-slate-100 text-lg">{Math.round(Number(currentCard.attendance_bonus_score) || 0)}</td>
+                                            <td className="px-6 py-4 font-bold text-slate-900 dark:text-slate-100 text-lg">{Math.round(Number(currentCard.attendance_bonus_score) || Number(currentCard.attendance_bonus_value) || 0)}</td>
                                             <td className="px-6 py-4 text-right text-slate-400 dark:text-slate-500">-</td>
                                         </tr>
                                     )}
