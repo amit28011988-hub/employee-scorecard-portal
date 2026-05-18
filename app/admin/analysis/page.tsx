@@ -84,15 +84,15 @@ export default function AnalysisPage() {
 
     // Compute percentile-based club for each scorecard (same logic as employee dashboard)
     const enrichedData = useMemo(() => {
-        // Group by month, rank within each month, assign club by percentile
-        const byMonth = new Map<string, any[]>()
+        // Group by month+team, rank within each group, assign club by percentile
+        const byMonthTeam = new Map<string, any[]>()
         allData.forEach((d: any) => {
-            const m = d.month || ""
-            if (!byMonth.has(m)) byMonth.set(m, [])
-            byMonth.get(m)!.push(d)
+            const key = `${d.month || ""}__${d.team || ""}`
+            if (!byMonthTeam.has(key)) byMonthTeam.set(key, [])
+            byMonthTeam.get(key)!.push(d)
         })
         const clubMap = new Map<string, string>() // keyed by $id
-        byMonth.forEach((docs) => {
+        byMonthTeam.forEach((docs) => {
             const ranked = [...docs].sort(compareScorecards)
             const total = ranked.length
             ranked.forEach((d, idx) => {

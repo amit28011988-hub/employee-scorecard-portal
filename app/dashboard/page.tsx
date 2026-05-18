@@ -94,7 +94,12 @@ function DashboardContent() {
     const getOverallClub = (card: any) => {
         if (!monthlyScores.length) return "N/A"
 
-        const rankedScores = [...monthlyScores].sort(compareScorecards)
+        // Rank within the same team only
+        const teamScores = card.team
+            ? monthlyScores.filter((s: any) => s.team === card.team)
+            : monthlyScores
+
+        const rankedScores = [...teamScores].sort(compareScorecards)
 
         const totalStrength = rankedScores.length
         if (totalStrength === 0) return "N/A"
