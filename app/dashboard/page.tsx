@@ -645,27 +645,15 @@ function DashboardContent() {
                                         </tr>
                                     )}
 
-                                    {/* Attendance */}
+                                    {/* Attendance Bonus — single row replacing the old Attendance + Attendance Bonus pair */}
                                     <tr className="hover:bg-slate-50 dark:hover:bg-slate-900/50">
-                                        <td className="px-6 py-4 font-medium text-slate-900 dark:text-slate-100">Attendance</td>
-                                        <td className="px-6 py-4 text-slate-500 dark:text-slate-400">100%</td>
-                                        <td className="px-6 py-4 text-slate-500 dark:text-slate-400">{currentCard.team === 'BASF-SLB' ? '-' : 5}</td>
+                                        <td className="px-6 py-4 font-medium text-slate-900 dark:text-slate-100">Attendance Bonus</td>
+                                        <td className="px-6 py-4 text-slate-500 dark:text-slate-400">+5</td>
+                                        <td className="px-6 py-4 text-slate-500 dark:text-slate-400">5</td>
                                         <td className="px-6 py-4 font-bold text-slate-800 dark:text-slate-200">{Number(currentCard.attendance_value).toFixed(2)}%</td>
-                                        <td className="px-6 py-4 font-bold text-slate-900 dark:text-slate-100 text-lg">{currentCard.team === 'BASF-SLB' ? '-' : Math.round(currentCard.attendance_score)}</td>
+                                        <td className="px-6 py-4 font-bold text-slate-900 dark:text-slate-100 text-lg">{Math.round(Number(currentCard.attendance_bonus_score) || Number(currentCard.attendance_bonus_value) || currentCard.attendance_score || 0)}</td>
                                         <td className="px-6 py-4 text-right text-slate-400 dark:text-slate-500">-</td>
                                     </tr>
-
-                                    {/* Attendance Bonus (optional — BASF-SLB) */}
-                                    {currentCard.attendance_bonus_value !== undefined && currentCard.attendance_bonus_value !== "" && (
-                                        <tr className="hover:bg-slate-50 dark:hover:bg-slate-900/50">
-                                            <td className="px-6 py-4 font-medium text-slate-900 dark:text-slate-100">Attendance Bonus</td>
-                                            <td className="px-6 py-4 text-slate-500 dark:text-slate-400">+5</td>
-                                            <td className="px-6 py-4 text-slate-500 dark:text-slate-400">5</td>
-                                            <td className="px-6 py-4 font-bold text-slate-800 dark:text-slate-200">{currentCard.attendance_bonus_value}</td>
-                                            <td className="px-6 py-4 font-bold text-slate-900 dark:text-slate-100 text-lg">{Math.round(Number(currentCard.attendance_bonus_score) || Number(currentCard.attendance_bonus_value) || 0)}</td>
-                                            <td className="px-6 py-4 text-right text-slate-400 dark:text-slate-500">-</td>
-                                        </tr>
-                                    )}
 
                                     {/* Transaction % (optional — BASF-SLB, display only) */}
                                     {currentCard.transaction_percentage !== undefined && currentCard.transaction_percentage !== "" && (
