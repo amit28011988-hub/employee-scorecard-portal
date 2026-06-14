@@ -498,7 +498,149 @@ export default function AnalysisPage() {
                             </CardContent>
                         </Card>
 
-                        {/* 4. Biggest Movers */}
+                        {/* 4. Per-Employee Parameter Breakdown */}
+                        {selectedEmployee && (() => {
+                            const empData = teamFiltered
+                                .filter((d: any) => d.employee_name === selectedEmployee)
+                                .sort((a: any, b: any) => parseMonth(a.month) - parseMonth(b.month))
+                            if (empData.length === 0) return null
+                            const empTeam: string = empData[0]?.team || ''
+
+                            const metricDefs = [
+                                { key: 'productivity',  label: 'Productivity',        getScore: (c: any) => toNumber(c.productivity_score),   maxScore: empTeam === 'BASF-SLB' ? 55 : 30, getVal: (c: any) => toPercent(c.productivity_achieved), fmtVal: (v: number) => `${v.toFixed(1)}%`,  color: 'from-blue-600 to-blue-400',   show: true },
+                                { key: 'quality',       label: 'Quality',             getScore: (c: any) => toNumber(c.quality_score),         maxScore: 40,  getVal: (c: any) => toPercent(c.quality_achieved),      fmtVal: (v: number) => `${v.toFixed(2)}%`, color: 'from-teal-600 to-teal-400',   show: empTeam !== 'BASF-SLB' },
+                                { key: 'leave',         label: 'Unscheduled Leave',   getScore: (c: any) => toNumber(c.unplanned_leaves_score), maxScore: empTeam === 'BASF-SLB' ? 20 : 10, getVal: (c: any) => toNumber(c.unplanned_leaves_value), fmtVal: (v: number) => `${v}`,  color: 'from-orange-500 to-orange-400', show: true },
+                                { key: 'rca',           label: 'Escalations (RCA)',   getScore: (c: any) => toNumber(c.rca_score),             maxScore: 10,  getVal: (c: any) => toNumber(c.rca_value),              fmtVal: (v: number) => `${v}`,  color: 'from-rose-500 to-rose-400',   show: true },
+                                { key: 'pii',           label: 'PI Ideas',            getScore: (c: any) => toNumber(c.pii_score),             maxScore: 10,  getVal: (c: any) => toNumber(c.pii_approval),           fmtVal: (v: number) => `${v}`,  color: 'from-purple-500 to-purple-400', show: empTeam !== 'BASF-SLB' },
+                                { key: 'attendance',    label: 'Attendance Bonus',    getScore: (c: any) => toNumber(c.attendance_bonus_score) || toNumber(c.attendance_score), maxScore: 5, getVal: (c: any) => toNumber(c.attendance_value), fmtVal: (v: number) => `${v.toFixed(1)}%`, color: 'from-green-600 to-green-400', show: true },
+                                { key: 'schedule',      label: 'Schedule Adherence',  getScore: (c: any) => toNumber(c.schedule_adherence_score), maxScore: 20, getVal: (c: any) => toNumber(c.schedule_adherence_value), fmtVal: (v: number) => `${v}`, color: 'from-cyan-600 to-cyan-400', show: ['QA', 'BASF-SLB', 'Doc Update'].includes(empTeam) },
+                            ]
+                            const visibleMetrics = metricDefs.filter(m => m.show)
+
+                            // Smart insights for admin
+                            const adminInsights: { type: 'positive' | 'warning' | 'focus'; text: string }[] = []
+                            if (empData.length >= 2) {
+                                const last = empData[empData.length - 1]
+                                const prev = empData[empData.length - 2]
+                                const diff = Math.round(toNumber(last.total_score) - toNumber(prev.total_score))
+                                if (diff > 2) adminInsights.push({ type: 'positive', text: `Score improved by ${diff} pts in ${last.month} vs ${prev.month}` })
+                                else if (diff < -2) adminInsights.push({ type: 'warning', text: `Score dropped by ${Math.abs(diff)} pts in ${last.month}` })
+                                if (empTeam !== 'BASF-SLB') {
+                                    const lastQ = toPercent(last.quality_achieved)
+                                    const prevQ = toPercent(prev.quality_achieved)
+                                    if (lastQ < prevQ - 0.3) adminInsights.push({ type: 'warning', text: `Quality dipped: ${prevQ.toFixed(2)}% → ${lastQ.toFixed(2)}%` })
+                                    else if (lastQ >= 99.5) adminInsights.push({ type: 'positive', text: `Excellent quality at ${lastQ.toFixed(2)}%` })
+                                }
+                                if (empData.length >= 3) {
+                                    const last3 = empData.slice(-3)
+                                    if (toNumber(last3[2].total_score) > toNumber(last3[1].total_score) && toNumber(last3[1].total_score) > toNumber(last3[0].total_score)) {
+                                        adminInsights.push({ type: 'positive', text: `3 months of continuous improvement` })
+                                    }
+                                }
+                            }
+                            if (empData.length >= 1) {
+                                const latest = empData[empData.length - 1]
+                                const rca = toNumber(latest.rca_value)
+                                if (rca >= 2) adminInsights.push({ type: 'warning', text: `${rca} RCAs in ${latest.month} — NULL & VOID risk!` })
+                                else if (rca === 1) adminInsights.push({ type: 'focus', text: `1 escalation in ${latest.month}` })
+                                const leaves = toNumber(latest.unplanned_leaves_value)
+                                if (leaves > 0) adminInsights.push({ type: 'focus', text: `${leaves} unscheduled leave(s) in ${latest.month}` })
+                                if (empTeam !== 'BASF-SLB' && toNumber(latest.pii_approval) === 0) adminInsights.push({ type: 'focus', text: `No PI Ideas in ${latest.month}` })
+                                const prod = toPercent(latest.productivity_achieved)
+                                if (prod >= 105) adminInsights.push({ type: 'positive', text: `Outstanding productivity: ${prod.toFixed(1)}%` })
+                                else if (prod < 85 && prod > 0) adminInsights.push({ type: 'focus', text: `Productivity at ${prod.toFixed(1)}% — needs attention` })
+                            }
+
+                            const insightStyles = {
+                                positive: 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300',
+                                warning:  'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300',
+                                focus:    'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-300',
+                            }
+                            const insightIcons = { positive: '✅', warning: '⚠️', focus: '🎯' }
+
+                            return (
+                                <Card>
+                                    <CardHeader>
+                                        <CardTitle className="flex items-center gap-2 text-gradient-primary font-bold">
+                                            <BarChart3 className="w-5 h-5 text-purple-500" />
+                                            Parameter Breakdown — {selectedEmployee}
+                                        </CardTitle>
+                                        <p className="text-sm text-muted-foreground">Month-wise score per metric with smart insights</p>
+                                    </CardHeader>
+                                    <CardContent className="space-y-5">
+                                        {adminInsights.length > 0 && (
+                                            <div className="space-y-2">
+                                                {adminInsights.map((ins, i) => (
+                                                    <div key={i} className={`flex items-center gap-2 rounded-lg border px-4 py-2 text-sm ${insightStyles[ins.type]}`}>
+                                                        <span>{insightIcons[ins.type]}</span>
+                                                        <span>{ins.text}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                                            {visibleMetrics.map(metric => {
+                                                const mData = empData.map((c: any) => ({
+                                                    month: c.month as string,
+                                                    score: metric.getScore(c),
+                                                    val: metric.getVal(c),
+                                                    id: c.$id as string,
+                                                }))
+                                                const avgS = mData.reduce((s: number, d: any) => s + d.score, 0) / mData.length
+                                                const pct = Math.round((avgS / metric.maxScore) * 100)
+                                                return (
+                                                    <div key={metric.key} className="bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-200 dark:border-slate-800 p-4">
+                                                        <div className="flex justify-between items-start mb-2">
+                                                            <div>
+                                                                <div className="text-sm font-semibold text-slate-700 dark:text-slate-200">{metric.label}</div>
+                                                                <div className="text-xs text-slate-400">Max {metric.maxScore} pts</div>
+                                                            </div>
+                                                            <div className="text-right">
+                                                                <div className="text-lg font-extrabold text-blue-600 dark:text-blue-400">{avgS.toFixed(1)}</div>
+                                                                <div className="text-xs text-slate-400">avg ({pct}%)</div>
+                                                            </div>
+                                                        </div>
+                                                        <div className="h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full mb-3 overflow-hidden">
+                                                            <div className={`h-full bg-gradient-to-r ${metric.color} rounded-full`} style={{ width: `${Math.min(100, pct)}%` }} />
+                                                        </div>
+                                                        {mData.length < 2 ? (
+                                                            <div className="text-xs text-slate-400">Only 1 month of data.</div>
+                                                        ) : (
+                                                            <>
+                                                                <div className="flex items-end gap-1.5 h-24 border-l border-b border-slate-200 dark:border-slate-700 pl-2 pb-1">
+                                                                    {mData.map((d: any) => {
+                                                                        const hp = metric.maxScore > 0 ? Math.max(2, (d.score / metric.maxScore) * 100) : 2
+                                                                        return (
+                                                                            <div key={d.id} className="flex flex-col items-center flex-1 h-full justify-end min-w-0">
+                                                                                <div className="text-[9px] font-bold text-slate-500">{Math.round(d.score)}</div>
+                                                                                <div
+                                                                                    className={`w-full max-w-[32px] bg-gradient-to-t ${metric.color} rounded-t opacity-90`}
+                                                                                    style={{ height: `${hp}%` }}
+                                                                                    title={`${d.month}: ${metric.fmtVal(d.val)} (${Math.round(d.score)} pts)`}
+                                                                                />
+                                                                            </div>
+                                                                        )
+                                                                    })}
+                                                                </div>
+                                                                <div className="flex gap-1.5 pl-2 pt-1">
+                                                                    {mData.map((d: any) => (
+                                                                        <div key={`${d.id}-l`} className="flex-1 min-w-0 text-center">
+                                                                            <div className="text-[8px] text-slate-400 truncate">{(d.month as string).split(' ')[0]?.slice(0, 3)}</div>
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            </>
+                                                        )}
+                                                    </div>
+                                                )
+                                            })}
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                            )
+                        })()}
+
+                        {/* 5. Biggest Movers */}
                         {(movers.climbers.length > 0 || movers.droppers.length > 0) && (
                             <Card>
                                 <CardHeader>
