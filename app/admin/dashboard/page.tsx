@@ -44,6 +44,11 @@ export default function AdminDashboard() {
     const [uploading, setUploading] = useState(false)
     const [progress, setProgress] = useState("")
     const [status, setStatus] = useState<{ type: 'success' | 'error' | null, message: string }>({ type: null, message: "" })
+    const [uploadMonth, setUploadMonth] = useState<string>(() => {
+        const d = new Date()
+        d.setMonth(d.getMonth() - 1)
+        return d.toLocaleString('default', { month: 'long', year: 'numeric' })
+    })
     const [allData, setAllData] = useState<any[]>([])
     const [selectedMonth, setSelectedMonth] = useState<string>("")
     const [selectedTeam, setSelectedTeam] = useState<string>("All")
@@ -309,7 +314,7 @@ export default function AdminDashboard() {
 
             if (isListMode) {
                 console.log("--- DETECTED MODE: BULK LIST (Database Style) ---")
-                await processBulkListMode(rawData, row0)
+                await processBulkListMode(rawData, row0, uploadMonth)
             } else {
                 console.log("--- DETECTED MODE: SINGLE REPORT (Key-Value Style) ---")
                 await processReportMode(rawData)
@@ -327,7 +332,7 @@ export default function AdminDashboard() {
     }
 
     // --- MODE 1: BULK LIST UPLOAD ---
-    const processBulkListMode = async (rawData: any[][], headers: string[]) => {
+    const processBulkListMode = async (rawData: any[][], headers: string[], monthOverride?: string) => {
         // Map Columns
         const getIdx = (keywords: string[]) => headers.findIndex(h => keywords.some(k => h.includes(k)))
 
@@ -418,13 +423,14 @@ export default function AdminDashboard() {
             const pii = getMetricPair(idxInfo.pii)
             const txnVal = getVal(idxInfo.txn)
 
-            // Month Fallback
+            // Month resolution: Excel column → admin override → calendar fallback
             let month = idxInfo.month !== -1 ? row[idxInfo.month] : ""
             if (!month) {
-                // Default to PREVIOUS month (e.g., Upload in Feb -> Report for Jan)
-                const d = new Date()
-                d.setMonth(d.getMonth() - 1)
-                month = d.toLocaleString('default', { month: 'long', year: 'numeric' })
+                month = monthOverride || (() => {
+                    const d = new Date()
+                    d.setMonth(d.getMonth() - 1)
+                    return d.toLocaleString('default', { month: 'long', year: 'numeric' })
+                })()
             }
 
             // Normalize month string to prevent matching issues
@@ -628,6 +634,18 @@ export default function AdminDashboard() {
                                 <div className="space-y-1">
                                     <p className="font-medium">Click to upload Excel file (.xlsx)</p>
                                     <p className="text-xs text-muted-foreground">Ensure headers match the template.</p>
+                                </div>
+                                <div className="flex flex-col items-center gap-1 w-full max-w-xs">
+                                    <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 self-start">Month for this upload</label>
+                                    <Input
+                                        type="text"
+                                        placeholder="e.g. May 2026"
+                                        value={uploadMonth}
+                                        onChange={e => setUploadMonth(e.target.value)}
+                                        disabled={uploading}
+                                        className="text-sm"
+                                    />
+                                    <p className="text-xs text-muted-foreground self-start">Used when Excel has no Month column</p>
                                 </div>
                                 <Input
                                     type="file"

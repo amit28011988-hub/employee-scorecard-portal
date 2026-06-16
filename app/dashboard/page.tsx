@@ -160,7 +160,7 @@ function DashboardContent() {
     const fetchData = async (username: string, monthOverride?: string) => {
         try {
             setLoading(true)
-            const response = await databases.listDocuments(DB_ID, SCORES_COLLECTION_ID, [Query.equal("employee_name", username)])
+            const response = await databases.listDocuments(DB_ID, SCORES_COLLECTION_ID, [Query.equal("employee_name", username), Query.limit(1000)])
             const docs = response.documents
             setScorecards(docs)
             if (monthOverride && docs.some(d => d.month === monthOverride)) {
@@ -429,7 +429,7 @@ function DashboardContent() {
                             onChange={(e) => setSelectedMonth(e.target.value)}
                         >
                             {scorecards.length > 0
-                                ? scorecards.map(s => <option key={s.$id} value={s.month}>{s.month}</option>)
+                                ? [...scorecards].sort((a, b) => parseMonth(b.month) - parseMonth(a.month)).map(s => <option key={s.$id} value={s.month}>{s.month}</option>)
                                 : <option>No Data</option>
                             }
                         </select>
